@@ -2,114 +2,91 @@
 import xarray as xr
 import matplotlib.pyplot as plt
 import numpy as np
+from orcestra.postprocess.level1 import (
+    _filter_clutter,
+    _add_clibration_mask,
+    _add_ground_mask,
+    _add_roll_mask,
+    _add_metadata,
+)
+
+# import matplotlib
+
+# %%
+
 
 # %% load data
+flight_id = "HALO-20240926a"
 ds_radar = xr.open_dataset(
-    "ipns://latest.orcestra-campaign.org/products/HALO/radar/moments/HALO-20240926a.zarr",
+    f"ipns://latest.orcestra-campaign.org/products/HALO/radar/moments/{flight_id}.zarr",
     engine="zarr",
-)
+).pipe(_add_metadata, flight_id)
 
-# %% plot histogram of dBZg > -30 against height
-fig, ax = plt.subplots(figsize=(5, 5))
-binary = ds_radar.dBZg > -30
-ax.plot(binary.height / 1e3, binary.sum("time"))
-ax.set_xlim(0, 0.5)
+sea_land_mask = xr.open_dataset("/work/bm1183/m301049/orcestra/sea_land_mask.nc")
+
+# %%
+ds_radar = _add_clibration_mask(ds_radar)
+ds_radar = _add_ground_mask(ds_radar, sea_land_mask)
+ds_radar = _add_roll_mask(ds_radar)
+ds_radar = _add_metadata(ds_radar)
+
+# %% filter ground signal based on reflection maxima
 
 
 # %%
-def filter_ground_signal(ds):
-    """
-    Filter radar data for ground reflections.
-
-    If a cell has dBZg > -30 in any of the lowest three height levels and
-    dBZg < -30 in the height level above, the cell is considered to be ground reflection.
-
-    Parameters
-    ----------
-    ds : xr.Dataset
-        Level1 radar dataset.
-
-    Returns
-    -------
-    xr.Dataset
-        Radar data filtered for ground reflections.
-    """
-
-    # create a binary mask
-    binary = ds.dBZg > -30
-
-    # filter all cells with dbZg > -30 in any of the lowest three height levels and dbZg < -30 in the height level above
-    mask_height = np.zeros_like(binary)
-    for level in range(3):
-        mask_height[:, level] = (
-            binary.isel(height=level).values > binary.isel(height=level + 1).values
-        )
-    mask_height[:, 0] = np.sum(mask_height[:, 0:3], axis=1)
-    mask_height[:, 1] = np.sum(mask_height[:, 1:3], axis=1)
-
-    # mask all cells below positive maks values
-    mask_height = xr.DataArray(
-        mask_height < 1,
-        dims=["time", "height"],
-        coords={"time": ds.time, "height": ds.height},
-    )
-
-    # filter all 2D variables
-    ds = ds.assign(
-        {
-            var: ds[var].where(mask_height)
-            for var in ds
-            if ds[var].dims == ("time", "height")
-        }
-    )
-    return ds
-
+ds_radar = _add_ground_mask(ds_radar, sea_land_mask)
 
 # %%
-ds = filter_ground_signal(ds_radar)
-
-# %% plot filtered vs unfiltered data
-timeslice = slice("2024-09-26 12:42", "2024-09-26 12:45")
-ds_radar_plot = ds_radar.sel(time=timeslice, height=slice(0, 3e3))
-ds_radar_plot_ground = ds_radar.sel(time=timeslice, height=slice(0, 0.2e3))
-ds_plot = ds.sel(time=timeslice, height=slice(0, 0.2e3))
-
-fig, axes = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
+plt.close("all")
+fig, axes = plt.subplots(2, 1, figsize=(10, 7), sharex=True, sharey=True)
 pcol = axes[0].pcolormesh(
-    ds_radar_plot.time,
-    ds_radar_plot.height,
-    ds_radar_plot.dBZg.T,
+    ds_radar.time,
+    ds_radar.height,
+    ds_radar.dBZg.T,
     cmap="YlGnBu",
     vmin=-30,
-    vmax=30,
+    vmax=40,
 )
 
-pcol = axes[1].pcolormesh(
-    ds_radar_plot_ground.time,
-    ds_radar_plot_ground.height,
-    ds_radar_plot_ground.dBZg.T,
+
+axes[1].pcolormesh(
+    ds_radar.time,
+    ds_radar.height,
+    ds_radar.dBZg.where(~ds_radar["mask_ground_return"]).T,
     cmap="YlGnBu",
     vmin=-30,
-    vmax=30,
+    vmax=40,
 )
 
-pcol = axes[2].pcolormesh(
-    ds_plot.time,
-    ds_plot.height,
-    ds_plot.dBZg.T,
-    cmap="YlGnBu",
-    vmin=-30,
-    vmax=30,
-)
 
-clab, extend, shrink = "Z /dBZg", "max", 0.8
-fig.colorbar(pcol, ax=axes, label=clab, extend=extend, shrink=shrink)
-axes[2].set_xlabel("Time")
+plt.show()
 
-for ax in axes:
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.set_ylabel("Height / m")
+# %% try clutter filter on radar data
 
-fig.savefig("quicklooks/gound_filter.png", bbox_inches="tight", dpi=300)
+radar_data = ds_radar.sel(time=slice("2024-09-26 14:30", "2024-09-26 14:35"))
+filtered_data = _filter_clutter(radar_data)
+
+# Visualize
+fig, axes = plt.subplots(1, 2, figsize=(20, 10), sharey=True)
+
+radar_binary = ~np.isnan(radar_data["dBZg"])
+filtered_binary = ~np.isnan(filtered_data["dBZg"])
+
+radar_binary.plot.pcolormesh(ax=axes[0], cmap="gray", x="time", add_colorbar=False)
+axes[0].set_title("Original Data Binary")
+
+filtered_binary.plot.pcolormesh(ax=axes[1], cmap="gray", x="time", add_colorbar=False)
+axes[1].set_title("Filtered Data Binary")
+
+
+# %% loop over all 2D vars and check if they contain clutter
+
+
+# %% try ground filter based on etopo data
+ds_topo = xr.open_dataset("/work/bm1183/m301049/orcestra/etopo.nc")
+
+# %%
+ds_topo["z"].sel(lat=slice(-30, 30)).plot.contourf()
+
 
 # %%
