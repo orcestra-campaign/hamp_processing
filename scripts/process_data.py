@@ -16,6 +16,8 @@ from orcestra.postprocess.level0 import (
 from orcestra.postprocess.level1 import (
     correct_radar_height,
     filter_radar,
+    add_masks_radar,
+    add_metadata_radar,
     filter_radiometer,
 )
 
@@ -58,6 +60,7 @@ def postprocess_hamp(date, flightletter, version):
     config_file = "process_config.yaml"
     with open(config_file, "r") as file:
         config = yaml.safe_load(file)
+    flight_id = config["flight_id"]
 
     # configure paths
     paths = {}
@@ -133,7 +136,13 @@ def postprocess_hamp(date, flightletter, version):
     # do level 2 processing
     print("Level 2 processing")
     sea_land_mask = xr.open_dataarray(paths["sea_land_mask"])
-    ds_radar_lev2 = correct_radar_height(ds_radar_lev1).pipe(filter_radar)
+
+    ds_radar_lev2 = (
+        ds_radar_lev1.pipe(correct_radar_height)
+        .pipe(filter_radar)
+        .pipe(add_metadata_radar, flight_id)
+        .pipe(add_masks_radar, sea_land_mask)
+    )
     ds_radiometer_lev2 = filter_radiometer(
         ds_radiometers_lev1_concat, sea_land_mask=sea_land_mask
     )
