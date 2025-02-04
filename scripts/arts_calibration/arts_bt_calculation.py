@@ -11,7 +11,6 @@ from src.arts_functions import (
     get_surface_windspeed,
     forward_model,
 )
-from src.plot_functions import plot_arts_flux
 from src.ipfs_helpers import read_nc
 from orcestra.postprocess.level0 import bahamas
 from src import readwrite_functions as rwfuncs
@@ -174,17 +173,6 @@ def calc_arts_bts(date):
         TBs_arts[sonde_id] = pd.DataFrame(data=BTs, index=freqs / 1e9)
         # get according hamp data
         TBs_hamp[sonde_id] = hampdata_loc.radiometers.TBs.values
-
-        # Plot to compare arts to hamp radiometers
-        fig, ax = plot_arts_flux(
-            TBs_hamp[sonde_id],
-            TBs_arts[sonde_id],
-            dropsonde_id=sonde_id,
-            time=drop_time,
-            ds_bahamas=ds_bahamas,
-        )
-        fig.savefig(f"Data/arts_calibration/{cfg['flightname']}/plots/{sonde_id}.png")
-        fig.clf()
 
     # save results
     TBs_arts.to_csv(f"Data/arts_calibration/{cfg['flightname']}/TBs_arts.csv")
