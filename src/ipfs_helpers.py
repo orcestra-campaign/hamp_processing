@@ -44,6 +44,14 @@ def read_nc(url):
         return xr.open_dataset(bio, engine="scipy")
 
 
+def read_mf_nc(url):
+    ds = xr.open_mfdataset(
+        fsspec.open_local(f"simplecache::{url}"),
+        combine_attrs="drop_conflicts",
+    )
+    return ds
+
+
 async def get_client(**kwargs):
     import aiohttp
 
