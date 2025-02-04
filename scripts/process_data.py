@@ -21,7 +21,7 @@ from orcestra.postprocess.level1 import (
     filter_radiometer,
 )
 
-from src.ipfs_helpers import add_encoding
+from src.ipfs_helpers import add_encoding, read_nc, read_mf_nc
 
 
 # %% define function
@@ -60,36 +60,31 @@ def postprocess_hamp(date, flightletter, version):
     config_file = "process_config.yaml"
     with open(config_file, "r") as file:
         config = yaml.safe_load(file)
-    flight_id = config["flight_id"]
 
     # configure paths
     paths = {}
-    paths["radar"] = config["root"] + config["radar"].format(
-        date=date, flightletter=flightletter
-    )
-    paths["radiometer"] = config["root"] + config["radiometer"].format(
+    paths["radar"] = config["radar"].format(date=date, flightletter=flightletter)
+    paths["radiometer"] = config["radiometer"].format(
         date=date, flightletter=flightletter
     )
     paths["bahamas"] = config["bahamas"].format(date=date, flightletter=flightletter)
-    paths["sea_land_mask"] = config["root"] + config["sea_land_mask"]
-    paths["save_dir"] = config["root"] + config["save_dir"].format(
-        date=date, flightletter=flightletter
-    )
+    paths["sea_land_mask"] = config["sea_land_mask"]
+    paths["save_dir"] = config["save_dir"].format(date=date, flightletter=flightletter)
 
     # load raw data
     print(f"Loading raw data for {date}")
-    ds_radar_raw = xr.open_mfdataset(paths["radar"]).load()
+    ds_radar_raw = read_mf_nc(paths["radar"]).load()
     ds_bahamas = (
         xr.open_dataset(paths["bahamas"], engine="zarr")
         .reset_coords(["lat", "lon", "alt"])
         .resample(time="0.25s")
         .mean()
     )
-    ds_iwv_raw = xr.open_dataset(f"{paths['radiometer']}/KV/{date[2:]}.IWV.NC")
+    ds_iwv_raw = read_nc(f"{paths['radiometer']}/KV/{date[2:]}.IWV.NC")
     radiometers = ["183", "11990", "KV"]
     ds_radiometers_raw = {}
     for radio in radiometers:
-        ds_radiometers_raw[radio] = xr.open_dataset(
+        ds_radiometers_raw[radio] = read_nc(
             f"{paths['radiometer']}/{radio}/{date[2:]}.BRT.NC"
         )
 
@@ -140,7 +135,7 @@ def postprocess_hamp(date, flightletter, version):
     ds_radar_lev2 = (
         ds_radar_lev1.pipe(correct_radar_height)
         .pipe(filter_radar)
-        .pipe(add_metadata_radar, flight_id)
+        .pipe(add_metadata_radar, flight_id=f"HALO-{date}{flightletter}")
         .pipe(add_masks_radar, sea_land_mask)
     )
     ds_radiometer_lev2 = filter_radiometer(
@@ -174,20 +169,14 @@ def postprocess_hamp(date, flightletter, version):
 
 # %% run postprocessing
 dates = [
-    "20241112",
-    "20241114",
-    "20241116",
-    "20241119",
+    "20240926",
 ]
 
 flightletters = [
-    "b",
-    "b",
-    "a",
     "a",
 ]
 
-version = "0.3"
+version = "1.0"
 for date, flightletter in zip(dates, flightletters):
     postprocess_hamp(date, flightletter, version)
 
