@@ -83,14 +83,6 @@ def add_georeference(ds, lat, lon, plane_pitch, plane_roll, plane_altitude, sour
     return ds
 
 
-def _add_flight_id(ds, flight_id):
-    """
-    Add flight_id to the dataset.
-    """
-    ds.attrs["flight_id"] = flight_id
-    return ds
-
-
 def bahamas(ds):
     """Post-processing of BAHAMAS datasets."""
     return ds.pipe(
