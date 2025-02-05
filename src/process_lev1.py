@@ -321,23 +321,19 @@ def add_metadata_radar(ds, flight_id):
     ds.attrs["summary"] = (
         "Processed data from the MIRA cloud radar onboard the HALO aircraft"
     )
-    ds.attrs["creator_name"] = ["Jakob Deutloff", "Lukas Kluft"]
-    ds.attrs["creator_email"] = [
-        "jakob.deutloff@uni-hamburg.de",
-        "lukas.kluft@mpimet.mpg.de",
-    ]
-    ds.attrs["project"] = ["ORCESTRA", "PERCUSION"]
+    ds.attrs["creator_name"] = "Jakob Deutloff, Lukas Kluft"
+    ds.attrs["creator_email"] = (
+        "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de"
+    )
+    ds.attrs["project"] = "ORCESTRA, PERCUSION"
     ds.attrs["platform"] = "HALO"
-    ds.attrs["history"] = "The processing software is available at [doi to zenodo git]"
-    ds.attrs["license"] = "tbd"
-    ds.attrs["references"] = ["10.5194/amt-12-1815-2019", "10.5194/essd-13-5545-2021"]
-    ds.attrs["keywords"] = [
-        "Cloud Radar",
-        "HALO",
-        "ORCESTRA",
-        "PERCUSION",
-        "Tropical Atlantic",
-    ]
+    ds.attrs["history"] = (
+        "The processing software is available at https://github.com/orcestra-campaign/hamp_processing"
+    )
+    ds.attrs["licence"] = "CC-BY-4.0"
+    ds.attrs["featureType"] = "trajectory" / "trajectoryProfile"
+    ds.attrs["references"] = "10.5194/amt-12-1815-2019, 10.5194/essd-13-5545-2021"
+    ds.attrs["keywords"] = "Cloud Radar, HALO, ORCESTRA, PERCUSION, Tropical Atlantic"
 
     # remove oudated attrs
     ds.attrs.pop("Copywright", None)
