@@ -1,7 +1,0 @@
-date: '20240827'
-flightletter: a
-flightname: HALO-{date}{flightletter}
-iwv: ipns://latest.orcestra-campaign.org/products/HALO/iwv/HALO-{date}{flightletter}.zarr
-bahamas: ipns://latest.orcestra-campaign.org/products/HALO/position_attitude/HALO-{date}{flightletter}.zarr
-radar: ipns://latest.orcestra-campaign.org/products/HALO/radar/moments/HALO-{date}{flightletter}.zarr
-radiometer: ipns://latest.orcestra-campaign.org/products/HALO/radiometer/HALO-{date}{flightletter}.zarr
