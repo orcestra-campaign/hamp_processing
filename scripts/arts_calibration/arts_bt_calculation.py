@@ -1,7 +1,6 @@
 # %%
 import os
 import xarray as xr
-from src import load_data_functions as loadfuncs
 from src.arts_functions import (
     Hamp_channels,
     basic_setup,
@@ -10,16 +9,19 @@ from src.arts_functions import (
     get_surface_temperature,
     get_surface_windspeed,
     forward_model,
+    check_data,
 )
 from src.ipfs_helpers import read_nc
 from orcestra.postprocess.level0 import bahamas
-from src import readwrite_functions as rwfuncs
+import src.readwrite_functions as rwfuncs
+from src.post_processed_hamp_data import PostProcessedHAMPData
 import yaml
 import pandas as pd
 import typhon
 import pyarts
 from tqdm import tqdm
 import FluxSimulator as fsm
+from src.plots_functions import plot_dropsonde
 
 
 # %% get ARTS data
@@ -85,8 +87,10 @@ def calc_arts_bts(date):
 
     # read HAMP post-processed data
     print("Load HAMP Data")
-    hampdata = loadfuncs.load_hamp_data(
-        cfg["path_radar"], cfg["path_radiometers"], cfg["path_iwv"]
+    hampdata = PostProcessedHAMPData(
+        xr.open_dataset(cfg["path_radar"], engine="zarr"),
+        xr.open_dataset(cfg["path_radiometers"], engine="zarr"),
+        xr.open_dataset(cfg["path_iwv"], engine="zarr"),
     )
 
     # cloud mask from radar
@@ -127,8 +131,9 @@ def calc_arts_bts(date):
         )
 
         # check if dropsonde is broken (contains only nan values)
-        if ds_dropsonde_loc["ta"].isnull().mean().values == 1:
-            print(f"Dropsonde {sonde_id} is broken, skipping")
+        if not check_data(
+            ds_dropsonde_loc, ds_bahamas, hampdata_loc, drop_time, height, sonde_id
+        ):
             continue
 
         # get surface values
@@ -140,11 +145,13 @@ def calc_arts_bts(date):
             ds_dropsonde_loc, height, ds_bahamas
         )
 
+        plot_dropsonde(ds_dropsonde_extrap)
+
         # convert xarray to ARTS gridded field
         profile_grd = fsm.generate_gridded_field_from_profiles(
             pyarts.arts.Vector(ds_dropsonde_extrap["p"].values),
             ds_dropsonde_extrap["ta"].values,
-            ds_dropsonde_extrap["alt"].values,
+            ds_dropsonde_extrap["gpsalt"].values,
             gases={
                 "H2O": typhon.physics.specific_humidity2vmr(
                     ds_dropsonde_extrap["q"].values
@@ -181,7 +188,7 @@ def calc_arts_bts(date):
 
 # %% call function
 # date = str(sys.argv[1])
-calc_arts_bts("20240827")
+calc_arts_bts("20240811")
 
 # %% test turning extrapolated dropsonde profiles to ARTS input
 # read config

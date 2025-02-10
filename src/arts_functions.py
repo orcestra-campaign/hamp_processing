@@ -698,11 +698,11 @@ def extrapolate_dropsonde(ds_dropsonde, height, ds_bahamas):
 
     return xr.Dataset(
         {
-            "p": (("alt"), p_extrap),
-            "ta": (("alt"), ta_extrap),
-            "q": (("alt"), q_extrap),
+            "p": (("gpsalt"), p_extrap),
+            "ta": (("gpsalt"), ta_extrap),
+            "q": (("gpsalt"), q_extrap),
         },
-        coords={"alt": ds_dropsonde["gpsalt"].values},
+        coords={"gpsalt": ds_dropsonde["gpsalt"].values},
     )
 
 
@@ -814,3 +814,41 @@ def get_surface_windspeed(dropsonde):
     u = dropsonde["u"].where(~dropsonde["u"].isnull(), drop=True).values[0]
     v = dropsonde["v"].where(~dropsonde["v"].isnull(), drop=True).values[0]
     return np.sqrt(u**2 + v**2)
+
+
+def check_data(dropsonde, bahamas, hamp, drop_time, height, sonde_id):
+    """
+    Check if data is valid.
+
+    Parameters:
+        dropsonde (xr.Dataset): Dropsonde data.
+        bahamas (xr.Dataset): Bahamas data.
+        hamp (xr.Dataset): HAMP data.
+
+    Returns:
+        bool: True if data is valid, False otherwise.
+    """
+
+    if dropsonde["ta"].isnull().mean() == 1:
+        print(f"Dropsonde {sonde_id} contains nan only, skipping")
+        return False
+
+    if dropsonde["p"].dropna("gpsalt").diff("gpsalt").max() > 0:
+        print(
+            f"Dropsonde {sonde_id} pressure is not monotonically decreasing, skipping"
+        )
+        return False
+
+    if (
+        (bahamas.sel(time=drop_time, method="nearest")["TS"].isnull())
+        or (bahamas.sel(time=drop_time, method="nearest")["MIXRATIO"].isnull())
+        or (np.isnan(height))
+    ):
+        print(f"Bahamas at {drop_time} contains nan at timestep, skipping")
+        return False
+
+    if hamp["radiometers"].isnull().mean() == 1:
+        print(f"HAMP data at {drop_time} contains nan at timestep, skipping")
+        return False
+
+    return True
