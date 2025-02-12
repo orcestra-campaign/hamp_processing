@@ -29,17 +29,32 @@ class PostProcessedHAMPData:
         else:
             raise KeyError(f"no known return provided for key '{key}'")
 
-    def sel(self, timeslice, method="nearest"):
+    def sel(self, timeslice, method="nearest", dropna=False):
         cut_data = __class__(None, None, None)
         if self.radar is not None:
-            cut_data["radar"] = self.radar.sel(time=timeslice, method=method)
+            if dropna:
+                cut_data["radar"] = self.radar.dropna("time").sel(
+                    time=timeslice, method=method
+                )
+            else:
+                cut_data["radar"] = self.radar.sel(time=timeslice, method=method)
         if self.radiometers is not None:
-            cut_data["radiometers"] = self.radiometers.sel(
-                time=timeslice, method=method
-            )
+            if dropna:
+                cut_data["radiometers"] = self.radiometers.dropna("time").sel(
+                    time=timeslice, method=method
+                )
+            else:
+                cut_data["radiometers"] = self.radiometers.sel(
+                    time=timeslice, method=method
+                )
         if self.column_water_vapour is not None:
-            cut_data["column_water_vapour"] = self.column_water_vapour.sel(
-                time=timeslice, method=method
-            )
+            if dropna:
+                cut_data["column_water_vapour"] = self.column_water_vapour.dropna(
+                    "time"
+                ).sel(time=timeslice, method=method)
+            else:
+                cut_data["column_water_vapour"] = self.column_water_vapour.sel(
+                    time=timeslice, method=method
+                )
 
         return cut_data

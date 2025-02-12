@@ -41,7 +41,6 @@ calib_oters = [
     "20240928",
 ]
 
-next_flight_183 = ["202408"]
 
 # %% Read csv BTs
 dates = [
