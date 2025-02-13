@@ -154,41 +154,15 @@ def calc_arts_bts(date, flightletter):
     TBs_hamp.to_csv(f"Data/arts_calibration/{cfg['flightname']}/TBs_hamp.csv")
 
 
-# %% call function
-dates = [
-    "20240811",
-    "20240813",
-    "20240816",
-    "20240818",
-    "20240821",
-    "20240822",
-    "20240825",
-    "20240827",
-    "20240829",
-    "20240831",
-    "20240903",
-    "20240906",
-    "20240907",
-    "20240909",
-    "20240912",
-    "20240914",
-    "20240916",
-    "20240919",
-    "20240921",
-    "20240923",
-    "20240924",
-    "20240926",
-    "20240928",
-    "20240929",
+# %% loop over flights
+
+flights = pd.read_csv("flights.csv", index_col=0)
+flights_processed = flights[
+    (flights["location"] == "sal") | (flights["location"] == "barbados")
 ]
 
-flightletters = {}
-for date in dates:
-    flightletters[date] = "a"
-
-# %%
-for date in dates:
-    calc_arts_bts(date, flightletters[date])
+for date in flights_processed.index:
+    calc_arts_bts(str(date), flights_processed.loc[date]["flightletter"])
 
 
 # %%

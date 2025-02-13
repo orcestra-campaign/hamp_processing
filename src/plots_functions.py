@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def plot_dropsonde(ds_extrap, ds_loc):
@@ -53,3 +54,28 @@ def testplot_hamp(ds_radar, ds_radiometers):
     ds_radar["dBZg"].plot.pcolormesh(
         ax=axes[0], x="time", y="height", cmap="viridis", vmin=-30, vmax=30
     )
+
+
+def plot_regression(regression_coeffs, TB_arts, TB_hamp, date):
+    fig, axes = plt.subplots(5, 5, figsize=(15, 15))
+    TB_hamp = TB_hamp[TB_hamp.index.date == date]
+    TB_arts = TB_arts[TB_arts.index.date == date]
+    for i, freq in enumerate(TB_arts.columns):
+        x = np.linspace(
+            np.nanmin(TB_hamp[freq].values), np.nanmax(TB_hamp[freq].values), 100
+        )
+        y = (
+            regression_coeffs.loc[date, (freq, "slope")] * x
+            + regression_coeffs.loc[date, (freq, "intercept")]
+        )
+        axes.flatten()[i].scatter(
+            TB_hamp[freq], TB_arts[freq], color="blue", marker="o", s=1
+        )
+        axes.flatten()[i].plot(x, y, color="red")
+        axes.flatten()[i].set_title(f"{freq} GHz")
+
+    for ax in axes[:, 0]:
+        ax.set_ylabel("ARTS TB [K]")
+    for ax in axes[-1, :]:
+        ax.set_xlabel("HAMP TB [K]")
+    fig.tight_layout()
