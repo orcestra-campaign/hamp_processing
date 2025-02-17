@@ -1,4 +1,4 @@
-date: '20240928'
+date: '20240926'
 flightletter: a
 flightname: HALO-{date}{flightletter}
 iwv: ipns://latest.orcestra-campaign.org/products/HALO/iwv/HALO-{date}{flightletter}.zarr

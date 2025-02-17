@@ -3,18 +3,21 @@ import os
 import yaml
 import xarray as xr
 import shutil
+import pandas as pd
 from src.process import (
-    radiometer,
-    radar,
-    iwv,
+    format_radiometer,
+    format_radar,
+    format_iwv,
+    filter_radar,
+    filter_radiometer,
+    add_masks_radar,
+    add_masks_radiometer,
+    add_metadata_radar,
+    add_metadata_radiometer,
+    add_metadata_iwv,
     add_georeference,
     correct_radar_height,
-    filter_radar,
-    add_masks_radar,
-    add_metadata_radar,
-    filter_radiometer,
 )
-
 from src.ipfs_helpers import add_encoding, read_nc, read_mf_nc
 
 
@@ -25,23 +28,12 @@ def postprocess_hamp(date, flightletter, version):
     """
     Postprocess raw data from HAMP.
 
-    Uses the raw data from hamp and applies the following processing steps:
-    - Level 1 processing
-        - Fix bahamas data: Fixes time axis
-        - Fix radar data: Fixes time axis, adds dBZ variables, adds georefernce from bahamas
-        - Fix radiometer data: Fixes time axis, adds georefernce from bahamas
-        - Fix iwv data: Fixes time axis, adds georefernce from bahamas
-        - Concatenate radiometers: Concatenates radiometer data along frequency dimension
-    - Level 2 processing
-        - Correct radar height: Writes radar data on geometric height grid with 30m vertical grid spacing
-        - Filter radar: Filters radar data
-        - Filter radiometer: Filters radiometer data
-    Saves the processed data in the save_dir folder and gives a version number.
-
     Parameters
     ----------
     date : str
         Date of the data in the format YYYYMMDD
+    flightletter : str
+        Letter of the flight
     version : str
         Version number of the processed data
 
@@ -58,9 +50,13 @@ def postprocess_hamp(date, flightletter, version):
     # configure paths
     paths = {}
     paths["radar"] = config["radar"].format(date=date, flightletter=flightletter)
-    paths["radiometer"] = config["radiometer"].format(
-        date=date, flightletter=flightletter
-    )
+    # dirty fix
+    if date == "20240809":
+        paths["radiometer"] = config["radiometer"].format(date=date, flightletter="a")
+    else:
+        paths["radiometer"] = config["radiometer"].format(
+            date=date, flightletter=flightletter
+        )
     paths["bahamas"] = config["bahamas"].format(date=date, flightletter=flightletter)
     paths["sea_land_mask"] = config["sea_land_mask"]
     paths["save_dir"] = config["save_dir"].format(date=date, flightletter=flightletter)
@@ -82,9 +78,8 @@ def postprocess_hamp(date, flightletter, version):
             f"{paths['radiometer']}/{radio}/{date[2:]}.BRT.NC"
         )
 
-    # do level 1 processing
-    print("Level 1 processing")
-    ds_radar_lev1 = radar(ds_radar_raw).pipe(
+    print("Processing")
+    ds_radar_lev1 = format_radar(ds_radar_raw).pipe(
         add_georeference,
         lat=ds_bahamas["lat"],
         lon=ds_bahamas["lon"],
@@ -93,7 +88,7 @@ def postprocess_hamp(date, flightletter, version):
         plane_altitude=ds_bahamas["alt"],
         source=ds_bahamas.attrs["source"],
     )
-    ds_iwv_lev1 = iwv(ds_iwv_raw).pipe(
+    ds_iwv_lev1 = format_iwv(ds_iwv_raw).pipe(
         add_georeference,
         lat=ds_bahamas["lat"],
         lon=ds_bahamas["lon"],
@@ -104,7 +99,7 @@ def postprocess_hamp(date, flightletter, version):
     )
     ds_radiometers_lev1 = {}
     for radio in radiometers:
-        ds_radiometers_lev1[radio] = radiometer(ds_radiometers_raw[radio])
+        ds_radiometers_lev1[radio] = format_radiometer(ds_radiometers_raw[radio])
 
     # concatenate radiometers and add georeference
     ds_radiometers_lev1_concat = xr.concat(
@@ -122,56 +117,57 @@ def postprocess_hamp(date, flightletter, version):
         source=ds_bahamas.attrs["source"],
     )
 
-    # do level 2 processing
-    print("Level 2 processing")
-    sea_land_mask = xr.open_dataarray(paths["sea_land_mask"])
+    sea_land_mask = xr.open_dataarray(paths["sea_land_mask"]).load()
 
     ds_radar_lev2 = (
         ds_radar_lev1.pipe(correct_radar_height)
         .pipe(filter_radar)
-        .pipe(add_metadata_radar, flight_id=f"HALO-{date}{flightletter}")
+        .pipe(add_metadata_radar, flight_id=f"{date}{flightletter}")
         .pipe(add_masks_radar, sea_land_mask)
     )
-    ds_radiometer_lev2 = filter_radiometer(
-        ds_radiometers_lev1_concat, sea_land_mask=sea_land_mask
+    ds_radiometer_lev2 = (
+        filter_radiometer(ds_radiometers_lev1_concat)
+        .pipe(add_masks_radiometer, sea_land_mask)
+        .pipe(add_metadata_radiometer, flight_id=f"{date}{flightletter}")
     )
-    ds_iwv_lev2 = filter_radiometer(ds_iwv_lev1, sea_land_mask=sea_land_mask)
+    ds_iwv_lev2 = (
+        filter_radiometer(ds_iwv_lev1)
+        .pipe(add_metadata_iwv, flight_id=f"{date}{flightletter}")
+        .pipe(add_masks_radiometer, sea_land_mask)
+    )
 
-    # save data - delete if exists to prevent overwriting which can cause issues with zarr
     print(f"Saving data for {date}")
     ds_radar_lev2.attrs["version"] = version
     ds_radiometer_lev2.attrs["version"] = version
     ds_iwv_lev2.attrs["version"] = version
     # radar
-    path_radar = f"{paths['save_dir']}/radar/HALO-{date}a_radar.zarr"
+    path_radar = f"{paths['save_dir']}/radar/HALO-{date}{flightletter}_radar.zarr"
     if os.path.exists(path_radar):
         shutil.rmtree(path_radar)
     ds_radar_lev2.chunk(time=4**9).pipe(add_encoding).to_zarr(path_radar, mode="w")
     # radiometer
-    path_radiometer = f"{paths['save_dir']}/radiometer/HALO-{date}a_radio.zarr"
+    path_radiometer = (
+        f"{paths['save_dir']}/radiometer/HALO-{date}{flightletter}_radio.zarr"
+    )
     if os.path.exists(path_radiometer):
         shutil.rmtree(path_radiometer)
     ds_radiometer_lev2.chunk(time=4**9, frequency=-1).pipe(add_encoding).to_zarr(
         path_radiometer, mode="w"
     )
     # iwv
-    path_iwv = f"{paths['save_dir']}/iwv/HALO-{date}a_iwv.zarr"
+    path_iwv = f"{paths['save_dir']}/iwv/HALO-{date}{flightletter}_iwv.zarr"
     if os.path.exists(path_iwv):
         shutil.rmtree(path_iwv)
     ds_iwv_lev2.chunk(time=4**9).pipe(add_encoding).to_zarr(path_iwv, mode="w")
 
 
 # %% run postprocessing
-dates = [
-    "20240926",
-]
-
-flightletters = [
-    "a",
-]
-
+flights = pd.read_csv("flights.csv", index_col=0)
+flights = flights.loc[20240821:]
 version = "1.0"
-for date, flightletter in zip(dates, flightletters):
-    postprocess_hamp(date, flightletter, version)
+for date, flightletter in zip(flights.index, flights["flightletter"]):
+    postprocess_hamp(str(date), flightletter, version)
 
+# %%
+postprocess_hamp("20240818", "a", "1.0")
 # %%

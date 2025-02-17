@@ -1,19 +1,36 @@
 # %%
-import src.readwrite_functions as rwfuncs
-from src.post_processed_hamp_data import PostProcessedHAMPData
 from src.plots_functions import testplot_hamp
 import xarray as xr
+import yaml
+import pandas as pd
 
 # %% load data
-cfg = rwfuncs.extract_config_params("config_ipns.yaml")
+flights = pd.read_csv("flights.csv", index_col=0)
 
-hampdata = PostProcessedHAMPData(
-    xr.open_dataset(cfg["path_radar"], engine="zarr"),
-    xr.open_dataset(cfg["path_radiometers"], engine="zarr"),
-    xr.open_dataset(cfg["path_iwv"], engine="zarr"),
-)
+for date, flightletter in zip(flights.index, flights["flightletter"]):
+    with open("process_config.yaml", "r") as file:
+        cfg = yaml.safe_load(file)
 
-# %% plot
-testplot_hamp(hampdata.radar, hampdata.radiometers)
+    radar = xr.open_dataset(
+        f"{cfg['save_dir']}/radar/HALO-{date}{flightletter}_radar.zarr", engine="zarr"
+    )
+    radiometers = xr.open_dataset(
+        f"{cfg['save_dir']}/radiometer/HALO-{date}{flightletter}_radio.zarr",
+        engine="zarr",
+    )
+    iwv = xr.open_dataset(
+        f"{cfg['save_dir']}/iwv/HALO-{date}{flightletter}_iwv.zarr", engine="zarr"
+    )
+
+    # plot
+    fig = testplot_hamp(
+        radar,
+        radiometers,
+        iwv,
+        ground_filter=True,
+        roll_filter=True,
+        calibration_filter=True,
+    )
+    fig.savefig(f"Plots/{date}{flightletter}_hamp.png", dpi=300)
 
 # %%

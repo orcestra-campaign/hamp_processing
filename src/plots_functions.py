@@ -1,5 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.cm import get_cmap
+from matplotlib.colors import Normalize
+
+# import matplotlib
+# matplotlib.use("webagg")
 
 
 def plot_dropsonde(ds_extrap, ds_loc):
@@ -47,13 +52,81 @@ def plot_TB_comparison(TB_arts, TB_hamp, sonde_id):
     plt.show()
 
 
-def testplot_hamp(ds_radar, ds_radiometers):
+def testplot_hamp(
+    ds_radar,
+    ds_radiometers,
+    ds_iwv,
+    ground_filter=True,
+    roll_filter=True,
+    calibration_filter=True,
+):
+    plt.close("all")
     fig, axes = plt.subplots(
-        6, 1, figsize=(10, 20), sharex=True, height_ratios=[3, 1, 1, 1, 1, 1]
+        7,
+        2,
+        figsize=(15, 20),
+        sharex="col",
+        height_ratios=[3, 1, 1, 1, 1, 1, 1],
+        width_ratios=[10, 1],
     )
-    ds_radar["dBZg"].plot.pcolormesh(
-        ax=axes[0], x="time", y="height", cmap="viridis", vmin=-30, vmax=30
+    data = ds_radar["dBZg"]
+    if ground_filter:
+        data = data.where(ds_radar["mask_ground_return"])
+    if roll_filter:
+        data = data.where(ds_radar["mask_roll"])
+    if calibration_filter:
+        data = data.where(ds_radar["mask_calibration"])
+
+    col = data.plot.pcolormesh(
+        ax=axes[0, 0],
+        x="time",
+        y="height",
+        cmap="YlGnBu",
+        vmin=-30,
+        vmax=30,
+        add_colorbar=False,
     )
+    cb = fig.colorbar(col, cax=axes[0, 1], orientation="vertical", shrink=0.5)
+    cb.set_label("dBZg")
+
+    # Define frequencies for each subplot
+    frequencies_list = [
+        [22.24, 23.04, 23.84, 25.44, 26.24, 27.84, 31.4],
+        [50.3, 51.76, 52.8, 53.75, 54.94, 56.66, 58.0],
+        [90],
+        [120.15, 121.05, 122.95, 127.25],
+        [183.91, 184.81, 185.81, 186.81, 188.31, 190.81],
+    ]
+
+    # Create a colormap
+    cmap = get_cmap("viridis")  # Adjust the range according to your frequencies
+
+    for i, frequencies in enumerate(frequencies_list):
+        for f in frequencies:
+            norm = Normalize(vmin=min(frequencies), vmax=max(frequencies))
+            color = cmap(norm(f))
+            ds_radiometers["TBs"].sel(frequency=[f]).plot(
+                ax=axes[i + 1, 0], x="time", label=f, color=color
+            )
+        handles, labels = axes[i + 1, 0].get_legend_handles_labels()
+        axes[i + 1, 1].legend(handles=handles, labels=labels)
+        axes[i + 1, 1].axis("off")
+        axes[i + 1, 0].set_title("")
+        axes[i + 1, 0].set_ylabel("TB / K")
+        axes[i + 1, 0].set_xlabel("")
+        axes[i + 1, 0].spines[["top", "right"]].set_visible(False)
+
+    ds_iwv["IWV"].plot(ax=axes[6, 0], x="time", color="k", label="IWV")
+    axes[6, 1].remove()
+    axes[6, 0].set_title("")
+    axes[6, 0].set_ylabel("IWV / kg m-2")
+    axes[0, 0].spines[["top", "right"]].set_visible(False)
+    axes[0, 0].set_xlabel("")
+    axes[0, 0].set_ylabel("Height / m")
+    axes[6, 0].set_xlabel("Time")
+    fig.tight_layout()
+
+    return fig
 
 
 def plot_regression(regression_coeffs, TB_arts, TB_hamp, date):
