@@ -34,3 +34,10 @@ for date, flightletter in zip(flights.index, flights["flightletter"]):
     fig.savefig(f"Plots/{date}{flightletter}_hamp.png", dpi=300)
 
 # %%
+
+ds = xr.open_dataset(
+    "/work/bm1183/m301049/orcestra/Hamp_Processed/radar/HALO-20240809b_radar.zarr",
+    engine="zarr",
+)
+
+# %%
