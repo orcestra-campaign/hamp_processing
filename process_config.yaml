@@ -1,0 +1,8 @@
+date: '20240827'
+flightletter: a
+flightname: HALO-{date}{flightletter}
+bahamas: ipns://latest.orcestra-campaign.org/products/HALO/position_attitude/HALO-{date}{flightletter}.zarr
+radar: ipns://latest.orcestra-campaign.org/raw/HALO/radar/HALO-{date}{flightletter}/mom/*.nc
+radiometer: ipns://latest.orcestra-campaign.org/raw/HALO/radiometer/HALO-{date}{flightletter}
+sea_land_mask: /work/bm1183/m301049/orcestra/sea_land_mask.nc
+save_dir: /work/bm1183/m301049/orcestra/Hamp_Processed
