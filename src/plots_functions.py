@@ -59,6 +59,7 @@ def testplot_hamp(
     ground_filter=True,
     roll_filter=True,
     calibration_filter=True,
+    amplifier_faults=True,
 ):
     plt.close("all")
     fig, axes = plt.subplots(
@@ -76,6 +77,8 @@ def testplot_hamp(
         data = data.where(ds_radar["mask_roll"])
     if calibration_filter:
         data = data.where(ds_radar["mask_calibration"])
+    if amplifier_faults:
+        ds_radiometers = ds_radiometers.where(ds_radiometers["mask_amplifier_fault"])
 
     col = data.plot.pcolormesh(
         ax=axes[0, 0],
@@ -125,6 +128,71 @@ def testplot_hamp(
     axes[0, 0].set_ylabel("Height / m")
     axes[6, 0].set_xlabel("Time")
     fig.tight_layout()
+
+    return fig
+
+
+def define_module(radio):
+    if (radio == "K") | (radio == "V"):
+        module = "KV"
+    elif radio == "183":
+        module = "183"
+    elif radio == "90":
+        module = "11990"
+    elif radio == "119":
+        module = "11990"
+    else:
+        raise ValueError("Invalid radiometer frequency")
+    return module
+
+
+def plot_radiometers(
+    ds_radiometers,
+    ds_radiometers_raw,
+):
+    plt.close("all")
+    fig, axes = plt.subplots(
+        5,
+        2,
+        figsize=(12, 7),
+        sharex="col",
+        width_ratios=[10, 1],
+    )
+
+    freqs = {
+        "K": slice(22, 32),
+        "V": slice(50, 58),
+        "183": slice(183, 191),
+        "119": slice(120, 128),
+        "90": 90,
+    }
+    for i, radio in enumerate(freqs.keys()):
+        ds_radiometers["TBs"].sel(frequency=freqs[radio]).plot.line(
+            ax=axes[i, 0], x="time", add_legend=False
+        )
+        if radio != "90":
+            handles = list(axes[i, 0].get_lines())
+            labels = ds_radiometers.sel(frequency=freqs[radio]).frequency.values
+            axes[i, 1].legend(handles, labels)
+        axes[i, 1].axis("off")
+        axes[i, 0].set_ylabel("TB / K")
+        axes[i, 0].set_xlabel("")
+        axes[i, 0].set_title(f"{radio}")
+        axes[i, 0].spines[["top"]].set_visible(False)
+        ax2 = axes[i, 0].twinx()
+        ax2.spines[["top"]].set_visible(False)
+        ax2.plot(
+            ds_radiometers_raw[define_module(radio)].time,
+            ds_radiometers_raw[define_module(radio)].sel(frequency=freqs[radio])[
+                "gain"
+            ],
+            color="grey",
+        )
+        ax2.set_ylabel("Gain")
+
+    axes[4, 0].set_xlabel("Time")
+    fig.tight_layout()
+    plt.show()
 
     return fig
 

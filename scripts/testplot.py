@@ -4,12 +4,13 @@ import xarray as xr
 import yaml
 import pandas as pd
 
-# %% load data
+# %% load config
 flights = pd.read_csv("flights.csv", index_col=0)
 
 with open("process_config.yaml", "r") as file:
     cfg = yaml.safe_load(file)
 
+# %% load full data
 radar = xr.open_dataset(f"{cfg['save_dir']}/full_radar.zarr", engine="zarr")
 radiometers = xr.open_dataset(
     f"{cfg['save_dir']}/full_radiometer.zarr",
@@ -17,9 +18,9 @@ radiometers = xr.open_dataset(
 )
 iwv = xr.open_dataset(f"{cfg['save_dir']}/full_iwv.zarr", engine="zarr")
 
-# %%
-for date in [20240929]:
-    if date == 20240929:  # only flight that crossed 0 UTC
+# %% plot all flights
+for date in flights.index:
+    if date == 20240928:  # only flight that crossed 0 UTC
         fig = testplot_hamp(
             radar.sel(time=slice("20240929", "20240930")),
             radiometers.sel(time=slice("20240929", "20240930")),
@@ -36,7 +37,32 @@ for date in [20240929]:
             ground_filter=True,
             roll_filter=True,
             calibration_filter=True,
+            amplifier_faults=True,
         )
-    fig.savefig(f"Plots/{date}_hamp.png", dpi=300)
+    fig.savefig(f"Plots/{date}_hamp_filtered.png", dpi=300)
+
+# %% plot single flight
+date = "20240916"
+flightletter = "a"
+radar = xr.open_dataset(
+    f"{cfg['save_dir']}/radar/HALO-{date}{flightletter}_radar.zarr", engine="zarr"
+)
+radiometers = xr.open_dataset(
+    f"{cfg['save_dir']}/radiometer/HALO-{date}{flightletter}_radio.zarr", engine="zarr"
+)
+iwv = xr.open_dataset(
+    f"{cfg['save_dir']}/iwv/HALO-{date}{flightletter}_iwv.zarr", engine="zarr"
+)
+
+# %%
+fig = testplot_hamp(
+    radar,
+    radiometers,
+    iwv,
+    ground_filter=True,
+    roll_filter=True,
+    calibration_filter=True,
+    amplifier_faults=True,
+)
 
 # %%

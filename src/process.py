@@ -5,6 +5,7 @@ import os
 import pandas as pd
 from scipy.ndimage import convolve
 from orcestra.utils import get_flight_segments
+import yaml
 
 # Get the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -246,11 +247,63 @@ def _add_sea_land_mask(ds, sea_land_mask, offset=pd.Timedelta("7s")):
         mask_path.loc[dict(time=slice(t - offset, t))] = 0
     for t in end_land:
         mask_path.loc[dict(time=slice(t, t + offset))] = 0
-    ds = ds.assign(mask_sea_land=(mask_path == 1).drop_vars(["lat", "lon"]))
+    ds = ds.assign(mask_sea_land=mask_path.drop_vars(["lat", "lon"]).astype(int))
     ds["mask_sea_land"].attrs = {
         "long_name": "Mask for sea and land.",
         "description": "1 indicates sea, 0 indicates land.",
     }
+    return ds
+
+
+def _add_amplifier_fault_mask(ds):
+    """Add a mask for amplifier faults to the radiometer dataset.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Level1 radiometer dataset.
+    Returns
+    -------
+    xr.Dataset
+        Radiometer dataset with a mask for amplifier faults.
+    """
+
+    date = pd.Timestamp(ds.time.values[0]).strftime("%Y%m%d")
+    path = f"{config['path_error_file']}HALO-{date}.yaml"
+    if os.path.exists(path):
+        with open(path) as f:
+            amplifier_faults = yaml.safe_load(f)
+    else:
+        amplifier_faults = {}
+
+    mask_amplifier_fault = xr.DataArray(
+        np.ones(ds.TBs.shape),
+        dims=ds.TBs.dims,
+        coords=ds.TBs.coords,
+        attrs={
+            "long_name": "Mask for amplifier faults",
+            "description": "1 indicates no amplifier fault, 0 indicates amplifier fault",
+        },
+    )
+
+    freq_of_module = {
+        "KV": slice(22, 58),
+        "183": slice(183, 191),
+        "119": slice(120, 128),
+        "90": 90,
+    }
+
+    for module in amplifier_faults.keys():
+        for time_tuple in amplifier_faults[module]:
+            mask_amplifier_fault.loc[
+                {
+                    "time": slice(f"{date}T{time_tuple[0]}", f"{date}T{time_tuple[1]}"),
+                    "frequency": freq_of_module[module],
+                }
+            ] = 0
+
+    ds = ds.assign(mask_amplifier_fault=mask_amplifier_fault.astype(int))
+
     return ds
 
 
@@ -290,7 +343,7 @@ def _add_clibration_mask(ds):
     for s in radar_calib_flight:
         mask_calib.loc[{"time": slice(s["start"], s["end"])}] = 0
 
-    ds = ds.assign(mask_calibration=mask_calib)
+    ds = ds.assign(mask_calibration=mask_calib.astype(int))
 
     return ds
 
@@ -332,7 +385,7 @@ def _add_ground_mask(ds, sea_land_mask, threshold=40):
     dz = ds.height.diff("height").mean().values
     mask_land = ds.height > (max_height + 6 * dz)
     mask_ocean = ds.height > (max_height + 2 * dz)
-    mask_ground_return = xr.where(sea_mask, mask_ocean, mask_land)
+    mask_ground_return = xr.where(sea_mask, mask_ocean, mask_land).astype(int)
 
     # add mask to dataset
     ds = ds.assign(mask_ground_return=mask_ground_return)
@@ -358,7 +411,7 @@ def _add_roll_mask(ds):
         Radar dataset with a mask for roll segments.
     """
 
-    mask_roll = np.abs(ds.plane_roll) <= 5
+    mask_roll = (np.abs(ds.plane_roll) <= 5).astype(int)
     mask_roll.attrs = {
         "long_name": "Mask for roll segments",
         "description": "0 indicates roll higher 5 deg, 1 indicates roll lower 5 deg",
@@ -482,6 +535,25 @@ def add_masks_radiometer(ds, sea_land_mask):
     -------
     xr.Dataset
         Radiometer dataset with masks for height and roll angle.
+    """
+
+    return ds.pipe(_add_sea_land_mask, sea_land_mask).pipe(_add_amplifier_fault_mask)
+
+
+def add_masks_iwv(ds, sea_land_mask):
+    """Add masks to IWV data for sea and land.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Level1 IWV dataset.
+    sea_land_mask : xr.DataArray
+        Mask of land and sea. 1 for sea, 0 for land.
+
+    Returns
+    -------
+    xr.Dataset
+        IWV dataset with masks for height and roll angle.
     """
 
     return ds.pipe(_add_sea_land_mask, sea_land_mask)

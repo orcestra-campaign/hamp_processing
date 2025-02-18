@@ -166,7 +166,7 @@ cython_debug/
 /planet_data
 /Radiometer_Data
 /Radar_Data
-/Data
+/Data/arts_calibration
 /Plots
 /arts_calibration
 /.vscode

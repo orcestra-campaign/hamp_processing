@@ -12,6 +12,7 @@ from src.process import (
     filter_radiometer,
     add_masks_radar,
     add_masks_radiometer,
+    add_masks_iwv,
     add_metadata_radar,
     add_metadata_radiometer,
     add_metadata_iwv,
@@ -164,7 +165,7 @@ def postprocess_hamp(date, flightletter, version):
     ds_iwv_lev2 = (
         filter_radiometer(ds_iwv_lev1)
         .pipe(add_metadata_iwv, flight_id=f"{date}{flightletter}")
-        .pipe(add_masks_radiometer, sea_land_mask)
+        .pipe(add_masks_iwv, sea_land_mask)
     )
 
     print(f"Saving data for {date}")
@@ -196,11 +197,9 @@ def postprocess_hamp(date, flightletter, version):
     )
 
 
-# %%
-postprocess_hamp("20240929", "a", "1.0")
-
 # %% run postprocessing
 flights = pd.read_csv("flights.csv", index_col=0)
+flights = flights.loc[20241119:]
 version = "1.0"
 for date, flightletter in zip(flights.index, flights["flightletter"]):
     postprocess_hamp(str(date), flightletter, version)
