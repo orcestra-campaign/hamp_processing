@@ -18,7 +18,7 @@ from src.process import (
     add_georeference,
     correct_radar_height,
 )
-from src.ipfs_helpers import add_encoding, read_nc, read_mf_nc
+from src.ipfs_helpers import get_encoding, read_nc, read_mf_nc
 
 
 # %% define function
@@ -70,13 +70,42 @@ def postprocess_hamp(date, flightletter, version):
         .resample(time="0.25s")
         .mean()
     )
-    ds_iwv_raw = read_nc(f"{paths['radiometer']}/KV/{date[2:]}.IWV.NC")
-    radiometers = ["183", "11990", "KV"]
-    ds_radiometers_raw = {}
-    for radio in radiometers:
-        ds_radiometers_raw[radio] = read_nc(
-            f"{paths['radiometer']}/{radio}/{date[2:]}.BRT.NC"
+    if date == "20240929":  # only flight that crossed 0 UTC
+        date_2 = "20240930"
+        ds_iwv_raw_29 = read_nc(f"{paths['radiometer']}/KV/{date[2:]}.IWV.NC")
+        ds_iwv_raw_30 = read_nc(f"{paths['radiometer']}/KV/{date_2[2:]}.IWV.NC")
+        ds_iwv_raw = xr.combine_by_coords(
+            [ds_iwv_raw_29, ds_iwv_raw_30],
+            data_vars="minimal",
+            compat="override",
+            coords="minimal",
         )
+        radiometers = ["183", "11990", "KV"]
+        ds_radiometers_raw_29 = {}
+        ds_radiometers_raw_30 = {}
+        ds_radiometers_raw = {}
+        for radio in radiometers:
+            ds_radiometers_raw_29[radio] = read_nc(
+                f"{paths['radiometer']}/{radio}/{date[2:]}.BRT.NC"
+            )
+            ds_radiometers_raw_30[radio] = read_nc(
+                f"{paths['radiometer']}/{radio}/{date_2[2:]}.BRT.NC"
+            )
+            ds_radiometers_raw[radio] = xr.combine_by_coords(
+                [ds_radiometers_raw_29[radio], ds_radiometers_raw_30[radio]],
+                data_vars="minimal",
+                compat="override",
+                coords="minimal",
+            )
+
+    else:
+        ds_iwv_raw = read_nc(f"{paths['radiometer']}/KV/{date[2:]}.IWV.NC")
+        radiometers = ["183", "11990", "KV"]
+        ds_radiometers_raw = {}
+        for radio in radiometers:
+            ds_radiometers_raw[radio] = read_nc(
+                f"{paths['radiometer']}/{radio}/{date[2:]}.BRT.NC"
+            )
 
     print("Processing")
     ds_radar_lev1 = format_radar(ds_radar_raw).pipe(
@@ -124,11 +153,13 @@ def postprocess_hamp(date, flightletter, version):
         .pipe(filter_radar)
         .pipe(add_metadata_radar, flight_id=f"{date}{flightletter}")
         .pipe(add_masks_radar, sea_land_mask)
+        .transpose("time", "height")
     )
     ds_radiometer_lev2 = (
         filter_radiometer(ds_radiometers_lev1_concat)
         .pipe(add_masks_radiometer, sea_land_mask)
         .pipe(add_metadata_radiometer, flight_id=f"{date}{flightletter}")
+        .transpose("time", "frequency")
     )
     ds_iwv_lev2 = (
         filter_radiometer(ds_iwv_lev1)
@@ -144,30 +175,35 @@ def postprocess_hamp(date, flightletter, version):
     path_radar = f"{paths['save_dir']}/radar/HALO-{date}{flightletter}_radar.zarr"
     if os.path.exists(path_radar):
         shutil.rmtree(path_radar)
-    ds_radar_lev2.chunk(time=4**9).pipe(add_encoding).to_zarr(path_radar, mode="w")
+    ds_radar_lev2.chunk(time=4**9, height=-1).to_zarr(
+        path_radar, encoding=get_encoding(ds_radar_lev2), mode="w"
+    )
     # radiometer
     path_radiometer = (
         f"{paths['save_dir']}/radiometer/HALO-{date}{flightletter}_radio.zarr"
     )
     if os.path.exists(path_radiometer):
         shutil.rmtree(path_radiometer)
-    ds_radiometer_lev2.chunk(time=4**9, frequency=-1).pipe(add_encoding).to_zarr(
-        path_radiometer, mode="w"
+    ds_radiometer_lev2.chunk(time=4**9, frequency=-1).to_zarr(
+        path_radiometer, encoding=get_encoding(ds_radiometer_lev2), mode="w"
     )
     # iwv
     path_iwv = f"{paths['save_dir']}/iwv/HALO-{date}{flightletter}_iwv.zarr"
     if os.path.exists(path_iwv):
         shutil.rmtree(path_iwv)
-    ds_iwv_lev2.chunk(time=4**9).pipe(add_encoding).to_zarr(path_iwv, mode="w")
+    ds_iwv_lev2.chunk(time=4**9).to_zarr(
+        path_iwv, encoding=get_encoding(ds_iwv_lev2), mode="w"
+    )
 
+
+# %%
+postprocess_hamp("20240929", "a", "1.0")
 
 # %% run postprocessing
 flights = pd.read_csv("flights.csv", index_col=0)
-flights = flights.loc[20240821:]
 version = "1.0"
 for date, flightletter in zip(flights.index, flights["flightletter"]):
     postprocess_hamp(str(date), flightletter, version)
 
-# %%
-postprocess_hamp("20240818", "a", "1.0")
+
 # %%

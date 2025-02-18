@@ -5,37 +5,37 @@ import io
 
 
 def get_chunks(dimensions):
-    if "frequency" in dimensions:
-        chunks = {
-            "time": 4**8,
-            "frequency": 5,
-        }
-    elif "height" in dimensions:
-        chunks = {
-            "time": 4**5,
-            "height": 4**4,
-        }
-    else:
-        chunks = {
-            "time": 4**9,
-        }
+    match dimensions:
+        case ("time",):
+            chunks = {
+                "time": 2**18,
+            }
+        case ("time", "height"):
+            chunks = {
+                "time": 2**11,
+                "height": 2**7,
+            }
+        case ("time", "frequency"):
+            chunks = {
+                "time": 2**16,
+                "frequency": 5,
+            }
 
     return tuple((chunks[d] for d in dimensions))
 
 
-def add_encoding(dataset):
-    numcodecs.blosc.set_nthreads(1)
-    compressor = numcodecs.Blosc("zstd")
+def get_encoding(dataset):
+    numcodecs.blosc.set_nthreads(1)  # IMPORTANT FOR DETERMINISTIC CIDs
+    codec = numcodecs.Blosc("zstd", shuffle=1, clevel=6)
 
-    for var in dataset.variables:
-        if var not in dataset.dims:
-            dataset[var].encoding = {
-                "compressor": compressor,
-                "dtype": "float32",
-                "chunks": get_chunks(dataset[var].dims),
-            }
-
-    return dataset
+    return {
+        var: {
+            "chunks": get_chunks(dataset[var].dims),
+            "compressor": codec,
+        }
+        for var in dataset.variables
+        if var not in dataset.dims
+    }
 
 
 def read_nc(url):
