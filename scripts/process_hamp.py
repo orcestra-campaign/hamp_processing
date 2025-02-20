@@ -199,7 +199,6 @@ def postprocess_hamp(date, flightletter, version):
 
 # %% run postprocessing
 flights = pd.read_csv("flights.csv", index_col=0)
-flights = flights.loc[20241119:]
 version = "1.0"
 for date, flightletter in zip(flights.index, flights["flightletter"]):
     postprocess_hamp(str(date), flightletter, version)

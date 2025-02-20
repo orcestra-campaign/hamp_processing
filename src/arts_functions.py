@@ -688,53 +688,45 @@ def fit_constant(x, y):
     return filled
 
 
-def get_profiles(sonde_id, ds_dropsonde, hampdata):
-    ds_dropsonde_loc = ds_dropsonde.sel(sonde_id=sonde_id)
-    drop_time = ds_dropsonde_loc["launch_time"].values
-    hampdata_loc = (
-        hampdata["radiometers"].dropna("time").sel(time=drop_time, method="nearest")
-    )
+def get_profiles(sonde, ds_dropsonde, radiometers):
+    ds_dropsonde_loc = ds_dropsonde.sel(sonde=sonde)
+    drop_time = ds_dropsonde_loc["sonde_time"].values
+    hampdata_loc = radiometers.dropna("time").sel(time=drop_time, method="nearest")
     height = float(hampdata_loc.plane_altitude.values)
     return ds_dropsonde_loc, hampdata_loc, height, drop_time
 
 
-def extrapolate_dropsonde(ds_dropsonde, height, ds_bahamas):
+def extrapolate_dropsonde(ds_dropsonde, height):
     # drop nans
-    ds_dropsonde = ds_dropsonde.where(ds_dropsonde["gpsalt"] < height, drop=True)
+    ds_dropsonde = ds_dropsonde.where(ds_dropsonde["altitude"] < height, drop=True)
     bool = (ds_dropsonde["p"].isnull()) & (
-        ds_dropsonde["gpsalt"] < 100
+        ds_dropsonde["altitude"] < 100
     )  # drop nans at lower levels
     ds_dropsonde = ds_dropsonde.where(~bool, drop=True)
 
     p_extrap = fit_exponential(
-        ds_dropsonde["gpsalt"].values,
-        ds_dropsonde["p"].interpolate_na("gpsalt").values,
+        ds_dropsonde["altitude"].values,
+        ds_dropsonde["p"].interpolate_na("altitude").values,
         p0=[1e5, -0.0001],
     )
 
     ta_extrap = fit_regression(
-        ds_dropsonde["gpsalt"].values,
-        ds_dropsonde["ta"].interpolate_na("gpsalt").values,
+        ds_dropsonde["altitude"].values,
+        ds_dropsonde["ta"].interpolate_na("altitude").values,
     )
 
     q_extrap = fit_constant(
-        ds_dropsonde["gpsalt"].values,
-        ds_dropsonde["q"].interpolate_na("gpsalt").values,
-    )
-
-    alt_extrap = fit_regression(
-        ds_dropsonde["gpsalt"].values,
-        ds_dropsonde["alt"].interpolate_na("gpsalt").values,
+        ds_dropsonde["altitude"].values,
+        ds_dropsonde["q"].interpolate_na("altitude").values,
     )
 
     return xr.Dataset(
         {
-            "p": (("gpsalt"), p_extrap),
-            "ta": (("gpsalt"), ta_extrap),
-            "q": (("gpsalt"), q_extrap),
-            "alt": (("gpsalt"), alt_extrap),
+            "p": (("altitude"), p_extrap),
+            "ta": (("altitude"), ta_extrap),
+            "q": (("altitude"), q_extrap),
         },
-        coords={"gpsalt": ds_dropsonde["gpsalt"].values},
+        coords={"altitude": ds_dropsonde["altitude"].values},
     )
 
 
@@ -768,7 +760,7 @@ def get_surface_windspeed(dropsonde):
     return np.sqrt(u**2 + v**2)
 
 
-def is_complete(dropsonde, hamp, drop_time, height, sonde_id):
+def is_complete(dropsonde, hamp, drop_time, height, sonde):
     """
     Check if data is complete and valid.
 
@@ -785,19 +777,16 @@ def is_complete(dropsonde, hamp, drop_time, height, sonde_id):
         (dropsonde["ta"].isnull().mean() == 1)
         or (dropsonde["p"].isnull().mean() == 1)
         or (dropsonde["q"].isnull().mean() == 1)
-        or (dropsonde["alt"].isnull().mean() == 1)
     ):
-        print(f"Dropsonde {sonde_id} contains nan only, skipping")
+        print(f"Dropsonde {sonde} contains nan only, skipping")
         return False
 
-    if dropsonde["p"].dropna("gpsalt").diff("gpsalt").max() > 0:
-        print(
-            f"Dropsonde {sonde_id} pressure is not monotonically decreasing, skipping"
-        )
+    if dropsonde["p"].dropna("altitude").diff("altitude").max() > 0:
+        print(f"Dropsonde {sonde} pressure is not monotonically decreasing, skipping")
         return False
 
     if dropsonde["p"].max() < 900e2:
-        print(f"Dropsonde {sonde_id} pressure is below 900 hPa, skipping")
+        print(f"Dropsonde {sonde} pressure is below 900 hPa, skipping")
         return
 
     if np.isnan(height):
@@ -813,9 +802,11 @@ def is_complete(dropsonde, hamp, drop_time, height, sonde_id):
         return False
 
     if (
-        dropsonde["alt"].where(~dropsonde["ta"].isnull(), drop=True).values[0] > 20
-    ) or (dropsonde["alt"].where(~dropsonde["u"].isnull(), drop=True).values[0] > 20):
-        print(f"Dropsonde {sonde_id} lowest altitude is above 20 m, skipping")
+        dropsonde["altitude"].where(~dropsonde["ta"].isnull(), drop=True).values[0] > 20
+    ) or (
+        dropsonde["altitude"].where(~dropsonde["u"].isnull(), drop=True).values[0] > 20
+    ):
+        print(f"Dropsonde {sonde} lowest altitude is above 20 m, skipping")
         return False
 
     return True

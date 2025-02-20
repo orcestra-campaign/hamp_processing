@@ -660,7 +660,7 @@ def add_metadata_radar(ds, flight_id):
     ds.attrs["history"] = (
         "The processing software is available at https://github.com/orcestra-campaign/hamp_processing"
     )
-    ds.attrs["licence"] = "CC-BY-4.0"
+    ds.attrs["license"] = "CC-BY-4.0"
     ds.attrs["featureType"] = "trajectoryProfile"
     ds.attrs["references"] = "10.5194/amt-12-1815-2019, 10.5194/essd-13-5545-2021"
     ds.attrs["keywords"] = "Cloud Radar, HALO, ORCESTRA, PERCUSION, Tropical Atlantic"
@@ -697,6 +697,7 @@ def add_metadata_radiometer(ds, flight_id):
         "The measurements are processed and quality controlled. The processing includes formatting the data,"
         "adding georeference information, and filtering for altitudes above 4800 m and adding a land-sea mask."
     )
+    ds.attrs["creator_name"] = "Jakob Deutloff, Lukas Kluft"
     ds.attrs["creator_email"] = (
         "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de"
     )
@@ -705,7 +706,7 @@ def add_metadata_radiometer(ds, flight_id):
     ds.attrs["history"] = (
         "The processing software is available at https://github.com/orcestra-campaign/hamp_processing"
     )
-    ds.attrs["licence"] = "CC-BY-4.0"
+    ds.attrs["license"] = "CC-BY-4.0"
     ds.attrs["featureType"] = "trajectoryProfile"
     ds.attrs["references"] = "10.5194/amt-12-1815-2019, 10.5194/essd-13-5545-2021"
     ds.attrs["keywords"] = (
@@ -747,6 +748,7 @@ def add_metadata_iwv(ds, flight_id):
         "The purpose of this data was to provide an estimate of IWV during the flights. The processing includes formatting the data,"
         "adding georeference information, filtering for altitudes above 4800 m and adding a land-sea mask."
     )
+    ds.attrs["creator_name"] = "Jakob Deutloff, Lukas Kluft"
     ds.attrs["creator_email"] = (
         "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de"
     )
@@ -755,7 +757,7 @@ def add_metadata_iwv(ds, flight_id):
     ds.attrs["history"] = (
         "The processing software is available at https://github.com/orcestra-campaign/hamp_processing"
     )
-    ds.attrs["licence"] = "CC-BY-4.0"
+    ds.attrs["license"] = "CC-BY-4.0"
     ds.attrs["featureType"] = "trajectoryProfile"
     ds.attrs["references"] = "10.5194/amt-7-4539-2014"
     ds.attrs["keywords"] = (

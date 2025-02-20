@@ -9,18 +9,18 @@ from matplotlib.colors import Normalize
 
 def plot_dropsonde(ds_extrap, ds_loc):
     fig, axes = plt.subplots(2, 3, figsize=(15, 9), sharey=True)
-    ds_extrap["ta"].plot(y="gpsalt", ax=axes[0, 0], label="Temperature", color="red")
-    ds_loc["ta"].plot(y="gpsalt", ax=axes[0, 0], label="Temperature", color="blue")
+    ds_extrap["ta"].plot(y="altitude", ax=axes[0, 0], label="Temperature", color="red")
+    ds_loc["ta"].plot(y="altitude", ax=axes[0, 0], label="Temperature", color="blue")
     ds_extrap["q"].plot(
-        y="gpsalt", ax=axes[0, 1], label="Specific humidity", color="red"
+        y="altitude", ax=axes[0, 1], label="Specific humidity", color="red"
     )
-    ds_loc["q"].plot(y="gpsalt", ax=axes[0, 1], label="Specific humidity", color="blue")
-    ds_extrap["p"].plot(y="gpsalt", ax=axes[0, 2], label="Pressure", color="red")
-    ds_loc["p"].plot(y="gpsalt", ax=axes[0, 2], label="Pressure", color="blue")
-    ds_extrap["alt"].plot(y="gpsalt", ax=axes[1, 0], label="Altitude", color="red")
-    ds_loc["alt"].plot(y="gpsalt", ax=axes[1, 0], label="Altitude", color="blue")
-    ds_loc["u"].plot(y="gpsalt", ax=axes[1, 1], label="u", color="blue")
-    ds_loc["v"].plot(y="gpsalt", ax=axes[1, 2], label="v", color="blue")
+    ds_loc["q"].plot(
+        y="altitude", ax=axes[0, 1], label="Specific humidity", color="blue"
+    )
+    ds_extrap["p"].plot(y="altitude", ax=axes[0, 2], label="Pressure", color="red")
+    ds_loc["p"].plot(y="altitude", ax=axes[0, 2], label="Pressure", color="blue")
+    ds_loc["u"].plot(y="altitude", ax=axes[1, 1], label="u", color="blue")
+    ds_loc["v"].plot(y="altitude", ax=axes[1, 2], label="v", color="blue")
     axes[0, 0].set_xlabel("Temperature / K")
     axes[0, 1].set_xlabel("Specific humidity")
     axes[0, 2].set_xlabel("Pressure / hPa")
@@ -220,3 +220,4 @@ def plot_regression(regression_coeffs, TB_arts, TB_hamp, date):
     for ax in axes[-1, :]:
         ax.set_xlabel("HAMP TB [K]")
     fig.tight_layout()
+    return fig
