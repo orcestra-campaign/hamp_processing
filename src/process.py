@@ -647,13 +647,13 @@ def add_metadata_radar(ds, flight_id):
         "MIRA Cloud Radar Moments from the HALO Microwave Package (Level 3)"
     )
     ds.attrs["summary"] = (
-        "This dataset contains measurements from the MIRA cloud radar onboard the HALO aircraft during the ORCESTRA campaign."
-        "The measurements are processed and quality controlled. The processing includes formatting the data, adding georeference information,"
+        "This dataset contains measurements from the MIRA cloud radar onboard the HALO aircraft during the ORCESTRA campaign. "
+        "The measurements are processed and quality controlled. The processing includes formatting the data, adding georeference information, "
         "filtering for noise, clutter and valid radar states, and adding masks for calibration, ground reflections, and roll segments."
     )
-    ds.attrs["creator_name"] = "Jakob Deutloff, Lukas Kluft"
+    ds.attrs["creator_name"] = "Jakob Deutloff, Lukas Kluft, Clara Bayley"
     ds.attrs["creator_email"] = (
-        "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de"
+        "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de, clara.bayley@mpimet.mpg.de"
     )
     ds.attrs["project"] = "ORCESTRA, PERCUSION"
     ds.attrs["platform"] = "HALO"
@@ -693,13 +693,13 @@ def add_metadata_radiometer(ds, flight_id):
     ds.attrs["flight_id"] = flight_id
     ds.attrs["title"] = "Radiometer Data from the Halo Microwave Package (Level 2)"
     ds.attrs["summary"] = (
-        "This dataset contains measurements from the radiometers onboard the HALO aircraft during the ORCESTRA campaign."
-        "The measurements are processed and quality controlled. The processing includes formatting the data,"
+        "This dataset contains measurements from the radiometers onboard the HALO aircraft during the ORCESTRA campaign. "
+        "The measurements are processed and quality controlled. The processing includes formatting the data, "
         "adding georeference information, and filtering for altitudes above 4800 m and adding a land-sea mask."
     )
-    ds.attrs["creator_name"] = "Jakob Deutloff, Lukas Kluft"
+    ds.attrs["creator_name"] = "Jakob Deutloff, Lukas Kluft, Clara Bayley"
     ds.attrs["creator_email"] = (
-        "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de"
+        "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de, clara.bayley@mpimet.mpg.de"
     )
     ds.attrs["project"] = "ORCESTRA, PERCUSION"
     ds.attrs["platform"] = "HALO"
@@ -743,14 +743,14 @@ def add_metadata_iwv(ds, flight_id):
         "Integrated Water Vapor Retrieval from the K-Band and W-Band Microwave Radiometers"
     )
     ds.attrs["summary"] = (
-        "This dataset contains retrievals of integrated water vapor (IWV) from the K-band and W-band microwave radiometers onboard the HALO aircraft during the ORCESTRA campaign."
-        "The retrieval is based on a linear regression model and should not be used for quantitative analysis."
-        "The purpose of this data was to provide an estimate of IWV during the flights. The processing includes formatting the data,"
+        "This dataset contains retrievals of integrated water vapor (IWV) from the KV-band microwave radiometer onboard the HALO aircraft during the ORCESTRA campaign. "
+        "The retrieval is based on a linear regression model and should not be used for quantitative analysis. "
+        "The purpose of this data was to provide an estimate of IWV during the flights. The processing includes formatting the data, "
         "adding georeference information, filtering for altitudes above 4800 m and adding a land-sea mask."
     )
-    ds.attrs["creator_name"] = "Jakob Deutloff, Lukas Kluft"
+    ds.attrs["creator_name"] = "Jakob Deutloff, Lukas Kluft, Clara Bayley"
     ds.attrs["creator_email"] = (
-        "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de"
+        "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de, clara.bayley@mpimet.mpg.de"
     )
     ds.attrs["project"] = "ORCESTRA, PERCUSION"
     ds.attrs["platform"] = "HALO"
@@ -775,3 +775,39 @@ def add_metadata_iwv(ds, flight_id):
     ds.attrs.pop("Radiometer_System", None)
 
     return ds
+
+
+def cleanup_radiometers(ds):
+    """Remove unnecessary variables from radiometer dataset.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Level1 radiometer dataset.
+
+    Returns
+    -------
+    xr.Dataset
+        Radiometer dataset without unnecessary variables.
+    """
+
+    return ds.drop_vars(["Rad_ID", "IntSampCnt", "file_code", "RSFactor", "Min_TBs"])
+
+
+def cleanup_iwv(ds):
+    """Remove unnecessary variables from IWV dataset.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Level1 IWV dataset.
+
+    Returns
+    -------
+    xr.Dataset
+        IWV dataset without unnecessary variables.
+    """
+
+    return ds.drop_vars(
+        ["Rad_ID", "IntSampCnt", "file_code", "RSFactor", "Max_IWV", "Min_IWV"]
+    )

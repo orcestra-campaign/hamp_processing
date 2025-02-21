@@ -18,6 +18,8 @@ from src.process import (
     add_metadata_iwv,
     add_georeference,
     correct_radar_height,
+    cleanup_iwv,
+    cleanup_radiometers,
 )
 from src.ipfs_helpers import get_encoding, read_nc, read_mf_nc
 
@@ -160,12 +162,14 @@ def postprocess_hamp(date, flightletter, version):
         filter_radiometer(ds_radiometers_lev1_concat)
         .pipe(add_masks_radiometer, sea_land_mask)
         .pipe(add_metadata_radiometer, flight_id=f"{date}{flightletter}")
+        .pipe(cleanup_radiometers)
         .transpose("time", "frequency")
     )
     ds_iwv_lev2 = (
         filter_radiometer(ds_iwv_lev1)
         .pipe(add_metadata_iwv, flight_id=f"{date}{flightletter}")
         .pipe(add_masks_iwv, sea_land_mask)
+        .pipe(cleanup_iwv)
     )
 
     print(f"Saving data for {date}")
