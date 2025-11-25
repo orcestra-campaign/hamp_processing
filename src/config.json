@@ -4,5 +4,5 @@
     "noise_threshold": 100,
     "altitude_threshold": 4800,
     "plane_variables": ["lat", "lon", "plane_altitude", "plane_roll", "plane_pitch"],
-    "path_error_file": "/home/m/m301049/hamp_processing/Data/error_files/"
+    "path_error_file": "/home/m/m301049/hamp_processing/error_files/"
 }
