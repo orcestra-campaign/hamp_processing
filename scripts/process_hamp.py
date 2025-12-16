@@ -25,8 +25,6 @@ from src.ipfs_helpers import get_encoding, read_nc, read_mf_nc
 
 
 # %% define function
-
-
 def postprocess_hamp(date, flightletter, version):
     """
     Postprocess raw data from HAMP.
@@ -67,14 +65,16 @@ def postprocess_hamp(date, flightletter, version):
     # load raw data
     print(f"Loading raw data for {date}")
     ds_radar_raw = read_mf_nc(paths["radar"]).load()
-    ds_bahamas = (
-        xr.open_dataset(paths["bahamas"], engine="zarr")
-        .reset_coords(["lat", "lon", "alt"])
-        .resample(time="0.25s")
-        .mean()
-    )
+
     if date == "20240929":  # only flight that crossed 0 UTC
         date_2 = "20240930"
+        ds_bahamas = (
+            xr.open_dataset(paths["bahamas"], engine="zarr")
+            .sel(time=slice(date, date_2))
+            .reset_coords(["lat", "lon", "alt"])
+            .resample(time="0.25s")
+            .mean()
+        )
         ds_iwv_raw_29 = read_nc(f"{paths['radiometer']}/KV/{date[2:]}.IWV.NC")
         ds_iwv_raw_30 = read_nc(f"{paths['radiometer']}/KV/{date_2[2:]}.IWV.NC")
         ds_iwv_raw = xr.combine_by_coords(
@@ -102,6 +102,13 @@ def postprocess_hamp(date, flightletter, version):
             )
 
     else:
+        ds_bahamas = (
+            xr.open_dataset(paths["bahamas"], engine="zarr")
+            .sel(time=date)
+            .reset_coords(["lat", "lon", "alt"])
+            .resample(time="0.25s")
+            .mean()
+        )
         ds_iwv_raw = read_nc(f"{paths['radiometer']}/KV/{date[2:]}.IWV.NC")
         radiometers = ["183", "11990", "KV"]
         ds_radiometers_raw = {}
@@ -118,7 +125,6 @@ def postprocess_hamp(date, flightletter, version):
         plane_pitch=ds_bahamas["pitch"],
         plane_roll=ds_bahamas["roll"],
         plane_altitude=ds_bahamas["alt"],
-        source=ds_bahamas.attrs["source"],
     )
     ds_iwv_lev1 = format_iwv(ds_iwv_raw).pipe(
         add_georeference,
@@ -127,7 +133,6 @@ def postprocess_hamp(date, flightletter, version):
         plane_pitch=ds_bahamas["pitch"],
         plane_roll=ds_bahamas["roll"],
         plane_altitude=ds_bahamas["alt"],
-        source=ds_bahamas.attrs["source"],
     )
     ds_radiometers_lev1 = {}
     for radio in radiometers:
@@ -146,7 +151,6 @@ def postprocess_hamp(date, flightletter, version):
         plane_pitch=ds_bahamas["pitch"],
         plane_roll=ds_bahamas["roll"],
         plane_altitude=ds_bahamas["alt"],
-        source=ds_bahamas.attrs["source"],
     )
 
     sea_land_mask = xr.open_dataarray(paths["sea_land_mask"]).load()
@@ -203,9 +207,11 @@ def postprocess_hamp(date, flightletter, version):
 
 # %% run postprocessing
 flights = pd.read_csv("flights.csv", index_col=0)
-version = "1.0"
+version = "1.1"
 for date, flightletter in zip(flights.index, flights["flightletter"]):
     postprocess_hamp(str(date), flightletter, version)
 
+# %% test postprocessing
+postprocess_hamp("20240929", "a", "1.1")
 
 # %%

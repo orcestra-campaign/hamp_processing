@@ -42,7 +42,7 @@ for date in flights.index:
     fig.savefig(f"Plots/{date}_hamp_filtered.png", dpi=300)
 
 # %% plot single flight
-date = "20240916"
+date = "20240929"
 flightletter = "a"
 radar = xr.open_dataset(
     f"{cfg['save_dir']}/radar/HALO-{date}{flightletter}_radar.zarr", engine="zarr"

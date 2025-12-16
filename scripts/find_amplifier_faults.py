@@ -3,6 +3,9 @@ import xarray as xr
 import yaml
 from src.ipfs_helpers import read_nc
 from src.plots_functions import plot_radiometers
+import matplotlib as mpl
+
+mpl.use("WebAgg")
 
 # %% load processed data
 with open("process_config.yaml", "r") as file:

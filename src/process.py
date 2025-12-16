@@ -421,7 +421,7 @@ def _add_roll_mask(ds):
     return ds
 
 
-def add_georeference(ds, lat, lon, plane_pitch, plane_roll, plane_altitude, source):
+def add_georeference(ds, lat, lon, plane_pitch, plane_roll, plane_altitude):
     """Add georeference information to dataset."""
     ds = ds.assign(
         plane_altitude=plane_altitude.sel(time=ds.time, method="nearest").assign_coords(
@@ -436,7 +436,6 @@ def add_georeference(ds, lat, lon, plane_pitch, plane_roll, plane_altitude, sour
             time=ds.time
         ),
     )
-    ds.attrs["georeference source"] = source
     return ds
 
 
@@ -643,23 +642,23 @@ def add_metadata_radar(ds, flight_id):
     """
 
     ds.attrs["flight_id"] = flight_id
-    ds.attrs["title"] = (
-        "MIRA Cloud Radar Moments from the HALO Microwave Package (Level 3)"
-    )
+    ds.attrs[
+        "title"
+    ] = "MIRA Cloud Radar Moments from the HALO Microwave Package (Level 3)"
     ds.attrs["summary"] = (
         "This dataset contains measurements from the MIRA cloud radar onboard the HALO aircraft during the ORCESTRA campaign. "
         "The measurements are processed and quality controlled. The processing includes formatting the data, adding georeference information, "
         "filtering for noise, clutter and valid radar states, and adding masks for calibration, ground reflections, and roll segments."
     )
     ds.attrs["creator_name"] = "Jakob Deutloff, Lukas Kluft, Clara Bayley"
-    ds.attrs["creator_email"] = (
-        "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de, clara.bayley@mpimet.mpg.de"
-    )
+    ds.attrs[
+        "creator_email"
+    ] = "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de, clara.bayley@mpimet.mpg.de"
     ds.attrs["project"] = "ORCESTRA, PERCUSION"
     ds.attrs["platform"] = "HALO"
-    ds.attrs["history"] = (
-        "The processing software is available at https://github.com/orcestra-campaign/hamp_processing"
-    )
+    ds.attrs[
+        "history"
+    ] = "The processing software is available at https://github.com/orcestra-campaign/hamp_processing"
     ds.attrs["license"] = "CC-BY-4.0"
     ds.attrs["featureType"] = "trajectoryProfile"
     ds.attrs["references"] = "10.5194/amt-12-1815-2019, 10.5194/essd-13-5545-2021"
@@ -698,20 +697,20 @@ def add_metadata_radiometer(ds, flight_id):
         "adding georeference information, and filtering for altitudes above 4800 m and adding a land-sea mask."
     )
     ds.attrs["creator_name"] = "Jakob Deutloff, Lukas Kluft, Clara Bayley"
-    ds.attrs["creator_email"] = (
-        "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de, clara.bayley@mpimet.mpg.de"
-    )
+    ds.attrs[
+        "creator_email"
+    ] = "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de, clara.bayley@mpimet.mpg.de"
     ds.attrs["project"] = "ORCESTRA, PERCUSION"
     ds.attrs["platform"] = "HALO"
-    ds.attrs["history"] = (
-        "The processing software is available at https://github.com/orcestra-campaign/hamp_processing"
-    )
+    ds.attrs[
+        "history"
+    ] = "The processing software is available at https://github.com/orcestra-campaign/hamp_processing"
     ds.attrs["license"] = "CC-BY-4.0"
     ds.attrs["featureType"] = "trajectoryProfile"
     ds.attrs["references"] = "10.5194/amt-12-1815-2019, 10.5194/essd-13-5545-2021"
-    ds.attrs["keywords"] = (
-        "Radiometer, Microwave, HALO, ORCESTRA, PERCUSION, Tropical Atlantic"
-    )
+    ds.attrs[
+        "keywords"
+    ] = "Radiometer, Microwave, HALO, ORCESTRA, PERCUSION, Tropical Atlantic"
 
     ds.attrs.pop("Comment", None)
     ds.attrs.pop("Radiometer_Location", None)
@@ -739,9 +738,9 @@ def add_metadata_iwv(ds, flight_id):
     """
 
     ds.attrs["flight_id"] = flight_id
-    ds.attrs["title"] = (
-        "Integrated Water Vapor Retrieval from the K-Band and W-Band Microwave Radiometers"
-    )
+    ds.attrs[
+        "title"
+    ] = "Integrated Water Vapor Retrieval from the K-Band and W-Band Microwave Radiometers"
     ds.attrs["summary"] = (
         "This dataset contains retrievals of integrated water vapor (IWV) from the KV-band microwave radiometer onboard the HALO aircraft during the ORCESTRA campaign. "
         "The retrieval is based on a linear regression model and should not be used for quantitative analysis. "
@@ -749,20 +748,20 @@ def add_metadata_iwv(ds, flight_id):
         "adding georeference information, filtering for altitudes above 4800 m and adding a land-sea mask."
     )
     ds.attrs["creator_name"] = "Jakob Deutloff, Lukas Kluft, Clara Bayley"
-    ds.attrs["creator_email"] = (
-        "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de, clara.bayley@mpimet.mpg.de"
-    )
+    ds.attrs[
+        "creator_email"
+    ] = "jakob.deutloff@uni-hamburg.de, lukas.kluft@mpimet.mpg.de, clara.bayley@mpimet.mpg.de"
     ds.attrs["project"] = "ORCESTRA, PERCUSION"
     ds.attrs["platform"] = "HALO"
-    ds.attrs["history"] = (
-        "The processing software is available at https://github.com/orcestra-campaign/hamp_processing"
-    )
+    ds.attrs[
+        "history"
+    ] = "The processing software is available at https://github.com/orcestra-campaign/hamp_processing"
     ds.attrs["license"] = "CC-BY-4.0"
     ds.attrs["featureType"] = "trajectoryProfile"
     ds.attrs["references"] = "10.5194/amt-7-4539-2014"
-    ds.attrs["keywords"] = (
-        "Radiometer, Microwave, Integrated Water Vapor, Retrieval, HALO, ORCESTRA, PERCUSION, Tropical Atlantic"
-    )
+    ds.attrs[
+        "keywords"
+    ] = "Radiometer, Microwave, Integrated Water Vapor, Retrieval, HALO, ORCESTRA, PERCUSION, Tropical Atlantic"
 
     ds.attrs.pop("Comment", None)
     ds.attrs.pop("Radiometer_Location", None)
