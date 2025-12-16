@@ -3,6 +3,7 @@ import pyarts
 from scipy.optimize import curve_fit
 import xarray as xr
 import pandas as pd
+from scipy.stats import linregress
 from pyarts.workspace import arts_agenda
 
 
@@ -270,7 +271,7 @@ def Hamp_channels(band_selection, rel_mandatory_grid_spacing=1.0 / 4.0):
 
     channels["F"] = {
         "f_center": np.ones(4) * 118.75e9,
-        "Offset1": np.array([1.3, 2.3, 4.2, 8.5]) * 1e9,
+        "Offset1": np.array([1.4, 2.3, 4.2, 8.5]) * 1e9,
         "Offset2": np.zeros(4),
         "NeDT": 0.6,
         "Accuracy": 1.5,
@@ -628,15 +629,18 @@ def exponential(x, a, b):
 
 def fit_exponential(x, y, p0):
     nanmask = np.isnan(y) | np.isnan(x)
-    popt, _ = curve_fit(exponential, x[~nanmask], y[~nanmask], p0=p0)
-    offset = y[~nanmask][-1]
-    idx_nan = np.where(nanmask)[0]
-    nanmask[idx_nan - 1] = True  # get overlap of one
-    filled = np.zeros_like(y)
-    filled[~nanmask] = y[~nanmask]
-    new_vals = exponential(x[nanmask], *popt)
-    filled[nanmask] = new_vals - new_vals[0] + offset
-    return filled
+    if np.sum(nanmask) > 0:
+        popt, _ = curve_fit(exponential, x[~nanmask], y[~nanmask], p0=p0)
+        offset = y[~nanmask][-1]
+        idx_nan = np.where(nanmask)[0]
+        nanmask[idx_nan - 1] = True  # get overlap of one
+        filled = np.zeros_like(y)
+        filled[~nanmask] = y[~nanmask]
+        new_vals = exponential(x[nanmask], *popt)
+        filled[nanmask] = new_vals - new_vals[0] + offset
+        return filled
+    else:
+        return y
 
 
 def fit_linear(x, y, upper_val, height):
@@ -655,136 +659,75 @@ def fit_linear(x, y, upper_val, height):
     return filled
 
 
-def get_profiles(sonde_id, ds_dropsonde, hampdata):
-    ds_dropsonde_loc = ds_dropsonde.sel(sonde_id=sonde_id)
-    drop_time = ds_dropsonde_loc["launch_time"].values
-    hampdata_loc = hampdata.sel(timeslice=drop_time, method="nearest")
-    height = float(hampdata_loc.radiometers.plane_altitude.values)
+def fit_regression(x, y):
+    nanmask = np.isnan(y) | np.isnan(
+        x
+    )  # nan's exist under plane where we want to extrapolate
+    last_val = y[~nanmask][-1]
+    last_height = x[~nanmask][-1]
+    idx_nan = np.where(nanmask)[0]
+    nanmask[idx_nan - 1] = True  # get overlap of one
+    slope = linregress(x[~nanmask], y[~nanmask]).slope
+    filled = np.zeros_like(y)
+    filled[~nanmask] = y[~nanmask]
+    new_vals = slope * (x[nanmask] - last_height) + last_val
+    filled[nanmask] = new_vals
+    return filled
+
+
+def fit_constant(x, y):
+    nanmask = np.isnan(y) | np.isnan(
+        x
+    )  # nan's exist under plane where we want to extrapolate
+    last_val = y[~nanmask][-1]
+    idx_nan = np.where(nanmask)[0]
+    nanmask[idx_nan - 1] = True  # get overlap of one
+    filled = np.zeros_like(y)
+    filled[~nanmask] = y[~nanmask]
+    filled[nanmask] = last_val
+    return filled
+
+
+def get_profiles(sonde, ds_dropsonde, radiometers):
+    ds_dropsonde_loc = ds_dropsonde.sel(sonde=sonde)
+    drop_time = ds_dropsonde_loc["sonde_time"].values
+    hampdata_loc = radiometers.dropna("time").sel(time=drop_time, method="nearest")
+    height = float(hampdata_loc.plane_altitude.values)
     return ds_dropsonde_loc, hampdata_loc, height, drop_time
 
 
-def extrapolate_dropsonde(ds_dropsonde, height, ds_bahamas):
+def extrapolate_dropsonde(ds_dropsonde, height):
     # drop nans
-    ds_dropsonde = ds_dropsonde.where(ds_dropsonde["gpsalt"] < height, drop=True)
+    ds_dropsonde = ds_dropsonde.where(ds_dropsonde["altitude"] < height, drop=True)
     bool = (ds_dropsonde["p"].isnull()) & (
-        ds_dropsonde["gpsalt"] < 100
+        ds_dropsonde["altitude"] < 100
     )  # drop nans at lower levels
     ds_dropsonde = ds_dropsonde.where(~bool, drop=True)
 
     p_extrap = fit_exponential(
-        ds_dropsonde["gpsalt"].values,
-        ds_dropsonde["p"].interpolate_na("gpsalt").values,
+        ds_dropsonde["altitude"].values,
+        ds_dropsonde["p"].interpolate_na("altitude").values,
         p0=[1e5, -0.0001],
     )
 
-    ta_extrap = fit_linear(
-        ds_dropsonde["gpsalt"].values,
-        ds_dropsonde["ta"].interpolate_na("gpsalt").values,
-        ds_bahamas["TS"]
-        .sel(time=ds_dropsonde["launch_time"].values, method="nearest")
-        .values,
-        height,
+    ta_extrap = fit_regression(
+        ds_dropsonde["altitude"].values,
+        ds_dropsonde["ta"].interpolate_na("altitude").values,
     )
 
-    q_extrap = fit_linear(
-        ds_dropsonde["gpsalt"].values,
-        ds_dropsonde["q"].interpolate_na("gpsalt").values,
-        ds_bahamas["MIXRATIO"]
-        .sel(time=ds_dropsonde["launch_time"].values, method="nearest")
-        .values
-        / 1e3,
-        height,
+    q_extrap = fit_constant(
+        ds_dropsonde["altitude"].values,
+        ds_dropsonde["q"].interpolate_na("altitude").values,
     )
 
     return xr.Dataset(
         {
-            "p": (("alt"), p_extrap),
-            "ta": (("alt"), ta_extrap),
-            "q": (("alt"), q_extrap),
+            "p": (("altitude"), p_extrap),
+            "ta": (("altitude"), ta_extrap),
+            "q": (("altitude"), q_extrap),
         },
-        coords={"alt": ds_dropsonde["gpsalt"].values},
+        coords={"altitude": ds_dropsonde["altitude"].values},
     )
-
-
-def average_double_bands(TB, freqs_hamp):
-    """Average double bands of ARTS simulations.
-
-    Parameters:
-        TB (ndarray): Brightness temperatures.
-
-    Returns:
-        ndarray: Averaged brightness temperatures.
-    """
-
-    TB_averaged = pd.DataFrame(index=freqs_hamp, columns=["TB"])
-    single_freqs = np.float32(
-        np.array(
-            [
-                22.24,
-                23.04,
-                23.84,
-                25.44,
-                26.24,
-                27.84,
-                31.4,
-                50.3,
-                51.76,
-                52.8,
-                53.75,
-                54.94,
-                56.66,
-                58.0,
-                90,
-            ]
-        )
-    )
-    double_freqs = np.float32(
-        np.array(
-            [
-                120.15,
-                121.05,
-                122.95,
-                127.25,
-                183.91,
-                184.81,
-                185.81,
-                186.81,
-                188.31,
-                190.81,
-            ]
-        )
-    )
-    mirror_freqs = np.float32(
-        np.array(
-            [
-                117.35,
-                116.45,
-                114.55,
-                110.25,
-                182.71,
-                181.81,
-                179.81,
-                178.31,
-                180.81,
-                175.81,
-            ]
-        )
-    )
-    counterparts = pd.DataFrame(
-        data=mirror_freqs, index=double_freqs, columns=["mirror_freq"]
-    )
-    for freq in freqs_hamp:
-        if freq in single_freqs:
-            TB_averaged.loc[freq] = TB.loc[freq].values[0]
-        else:
-            TB_averaged.loc[freq] = np.mean(
-                [
-                    float(TB.loc[freq].values),
-                    float(TB.loc[counterparts.loc[freq].values].values),
-                ]
-            )
-
-    return TB_averaged
 
 
 def get_surface_temperature(dropsonde):
@@ -798,7 +741,8 @@ def get_surface_temperature(dropsonde):
         float: Surface temperature.
     """
 
-    return dropsonde["ta"].where(~dropsonde["ta"].isnull(), drop=True).values[0]
+    T_surf = dropsonde["ta"].where(~dropsonde["ta"].isnull(), drop=True).values[0]
+    return T_surf
 
 
 def get_surface_windspeed(dropsonde):
@@ -814,3 +758,55 @@ def get_surface_windspeed(dropsonde):
     u = dropsonde["u"].where(~dropsonde["u"].isnull(), drop=True).values[0]
     v = dropsonde["v"].where(~dropsonde["v"].isnull(), drop=True).values[0]
     return np.sqrt(u**2 + v**2)
+
+
+def is_complete(dropsonde, hamp, drop_time, height, sonde):
+    """
+    Check if data is complete and valid.
+
+    Parameters:
+        dropsonde (xr.Dataset): Dropsonde data.
+        bahamas (xr.Dataset): Bahamas data.
+        hamp (xr.Dataset): HAMP data.
+
+    Returns:
+        bool: True if data is valid, False otherwise.
+    """
+
+    if (
+        (dropsonde["ta"].isnull().mean() == 1)
+        or (dropsonde["p"].isnull().mean() == 1)
+        or (dropsonde["q"].isnull().mean() == 1)
+    ):
+        print(f"Dropsonde {sonde} contains nan only, skipping")
+        return False
+
+    if dropsonde["p"].dropna("altitude").diff("altitude").max() > 0:
+        print(f"Dropsonde {sonde} pressure is not monotonically decreasing, skipping")
+        return False
+
+    if dropsonde["p"].max() < 900e2:
+        print(f"Dropsonde {sonde} pressure is below 900 hPa, skipping")
+        return
+
+    if np.isnan(height):
+        print(f"Bahamas at {drop_time} contains nan, skipping")
+        return False
+
+    if hamp["TBs"].isnull().mean().values == 1:
+        print(f"HAMP data at {drop_time} contains nan, skipping")
+        return False
+
+    if hamp["time"].values - drop_time > pd.Timedelta("2 minutes"):
+        print(f"HAMP data at {drop_time} is more than 2 minutes away, skipping")
+        return False
+
+    if (
+        dropsonde["altitude"].where(~dropsonde["ta"].isnull(), drop=True).values[0] > 20
+    ) or (
+        dropsonde["altitude"].where(~dropsonde["u"].isnull(), drop=True).values[0] > 20
+    ):
+        print(f"Dropsonde {sonde} lowest altitude is above 20 m, skipping")
+        return False
+
+    return True

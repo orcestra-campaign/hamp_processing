@@ -1,7 +1,13 @@
 # %%
 import os
 import xarray as xr
-from src import load_data_functions as loadfuncs
+import yaml
+import pandas as pd
+import typhon
+import pyarts
+from tqdm import tqdm
+import FluxSimulator as fsm
+import numpy as np
 from src.arts_functions import (
     Hamp_channels,
     basic_setup,
@@ -10,20 +16,13 @@ from src.arts_functions import (
     get_surface_temperature,
     get_surface_windspeed,
     forward_model,
+    is_complete,
 )
-from src.ipfs_helpers import read_nc
-from orcestra.postprocess.level0 import bahamas
-from src import readwrite_functions as rwfuncs
-import yaml
-import pandas as pd
-import typhon
-import pyarts
-from tqdm import tqdm
-import FluxSimulator as fsm
+
+# from src.plots_functions import plot_dropsonde, plot_TB_comparison
 
 
 # %% get ARTS data
-print("Download ARTS data")
 pyarts.cat.download.retrieve(verbose=True)
 
 # %% setup sensor
@@ -35,9 +34,20 @@ freqs = sensor_description[:, 0] + sensor_description[:, 1] + sensor_description
 # %% setup workspace
 ws = basic_setup([], sensor_description=sensor_description)
 
+# %% load data
+configfile = "process_config.yaml"
+with open(configfile, "r") as file:
+    cfg = yaml.safe_load(file)
+
+ds_dropsonde = xr.open_dataset(
+    "ipns://latest.orcestra-campaign.org/products/HALO/dropsondes/Level_3/PERCUSION_Level_3.zarr",
+    engine="zarr",
+)
+ds_dropsonde = ds_dropsonde.assign_coords(sonde=np.arange(ds_dropsonde.sonde.size))
+
 
 # %% define function
-def calc_arts_bts(date):
+def calc_arts_bts(date, flightletter, ds_dropsonde, cfg):
     """
     Calculates brightness temperatures for the radiometer frequencies with
     ARTS based on the dropsonde profiles for the flight on date.
@@ -51,49 +61,22 @@ def calc_arts_bts(date):
     None. Data is saved in arts_comparison folder.
     """
 
-    print("Read Config")
-    # change the date in config.yaml to date
-    configfile = "config_ipns.yaml"
-    with open(configfile, "r") as file:
-        config_yml = yaml.safe_load(file)
-    config_yml["date"] = date
-    with open(configfile, "w") as file:
-        yaml.dump(config_yml, file)
-    # read config
-    cfg = rwfuncs.extract_config_params(configfile)
-
-    # load bahamas data from ipfs
-    print("Load Bahamas Data")
-    ds_bahamas = (
-        read_nc(
-            f"ipns://latest.orcestra-campaign.org/raw/HALO/bahamas/{cfg['flightname']}/QL_*.nc"
-        )
-        .pipe(bahamas)
-        .interpolate_na("time")
+    flightname = f"HALO-{date}{flightletter}"
+    ds_radar = xr.open_dataset(
+        f"{cfg['save_dir']}/radar/{flightname}_radar.zarr", engine="zarr"
     )
-
-    # read dropsonde data
-    print("Load Dropsonde Data")
-    ds_dropsonde = xr.open_dataset(cfg["path_dropsondes"], engine="zarr")
+    ds_radiometers = xr.open_dataset(
+        f"{cfg['save_dir']}/radiometer/{flightname}_radio.zarr", engine="zarr"
+    )
     ds_dropsonde = ds_dropsonde.where(
-        (ds_dropsonde["interp_time"] > pd.to_datetime(cfg["date"]))
-        & (
-            ds_dropsonde["interp_time"]
-            < pd.to_datetime(cfg["date"]) + pd.DateOffset(hour=23)
-        )
-    ).dropna(dim="sonde_id", how="all")
+        (ds_dropsonde["interp_time"] > pd.to_datetime(date))
+        & (ds_dropsonde["interp_time"] < pd.to_datetime(date) + pd.DateOffset(hour=23))
+    ).dropna(dim="sonde", how="all")
 
-    # read HAMP post-processed data
-    print("Load HAMP Data")
-    hampdata = loadfuncs.load_hamp_data(
-        cfg["path_radar"], cfg["path_radiometers"], cfg["path_iwv"]
-    )
-
-    # cloud mask from radar
     print("Calculate Cloud Mask")
     ds_dropsonde = ds_dropsonde.assign(
         radar_cloud_flag=(
-            hampdata.radar.sel(time=ds_dropsonde.launch_time, method="nearest").sel(
+            ds_radar.sel(time=ds_dropsonde.sonde_time, method="nearest").sel(
                 height=slice(200, None)
             )["dBZe"]
             > -30
@@ -101,50 +84,41 @@ def calc_arts_bts(date):
         * 1
     )
     cloud_free_idxs = (
-        ds_dropsonde["sonde_id"]
-        .where(ds_dropsonde["radar_cloud_flag"] == 0, drop=True)
+        ds_dropsonde["sonde"]
+        .where((ds_dropsonde["radar_cloud_flag"] == 0).compute(), drop=True)
         .values
     )
 
-    # initialize result arrays
-    freqs_hamp = hampdata.radiometers.frequency.values
-    TBs_arts = pd.DataFrame(index=freqs_hamp, columns=cloud_free_idxs)
-    TBs_hamp = TBs_arts.copy()
+    freqs_hamp = ds_radiometers.frequency.values
+    TBs_arts = pd.DataFrame(index=freqs / 1e9, columns=cloud_free_idxs)
+    TBs_hamp = pd.DataFrame(index=freqs_hamp, columns=cloud_free_idxs)
 
-    # setup folders
     print("Setup Folders")
-    if not os.path.exists(f"Data/arts_calibration/{cfg['flightname']}"):
-        os.makedirs(f"Data/arts_calibration/{cfg['flightname']}")
-    if not os.path.exists(f"Data/arts_calibration/{cfg['flightname']}/plots"):
-        os.makedirs(f"Data/arts_calibration/{cfg['flightname']}/plots")
+    if not os.path.exists(f"Data/arts_calibration/{flightname}"):
+        os.makedirs(f"Data/arts_calibration/{flightname}")
+    if not os.path.exists(f"Data/arts_calibration/{flightname}/plots"):
+        os.makedirs(f"Data/arts_calibration/{flightname}/plots")
 
-    # loop over cloud free sondes
-    print(f"Running {cloud_free_idxs.size} dropsondes for {cfg['flightname']}")
-    for sonde_id in tqdm(cloud_free_idxs):
-        # get profiles
-        ds_dropsonde_loc, hampdata_loc, height, drop_time = get_profiles(
-            sonde_id, ds_dropsonde, hampdata
+    print(f"Running {cloud_free_idxs.size} dropsondes for {date}")
+    for sonde in tqdm(cloud_free_idxs):
+        ds_dropsonde_loc, radiometers_loc, height, drop_time = get_profiles(
+            sonde, ds_dropsonde, ds_radiometers
         )
 
-        # check if dropsonde is broken (contains only nan values)
-        if ds_dropsonde_loc["ta"].isnull().mean().values == 1:
-            print(f"Dropsonde {sonde_id} is broken, skipping")
+        if not is_complete(ds_dropsonde_loc, radiometers_loc, drop_time, height, sonde):
             continue
 
-        # get surface values
         surface_temp = get_surface_temperature(ds_dropsonde_loc)
         surface_ws = get_surface_windspeed(ds_dropsonde_loc)
 
-        # extrapolate dropsonde profiles
-        ds_dropsonde_extrap = extrapolate_dropsonde(
-            ds_dropsonde_loc, height, ds_bahamas
-        )
+        ds_dropsonde_extrap = extrapolate_dropsonde(ds_dropsonde_loc, height)
 
-        # convert xarray to ARTS gridded field
+        # plot_dropsonde(ds_dropsonde_extrap, ds_dropsonde_loc)
+
         profile_grd = fsm.generate_gridded_field_from_profiles(
             pyarts.arts.Vector(ds_dropsonde_extrap["p"].values),
             ds_dropsonde_extrap["ta"].values,
-            ds_dropsonde_extrap["alt"].values,
+            ds_dropsonde_extrap["altitude"].values,
             gases={
                 "H2O": typhon.physics.specific_humidity2vmr(
                     ds_dropsonde_extrap["q"].values
@@ -154,7 +128,6 @@ def calc_arts_bts(date):
             },
         )
 
-        # run arts
         BTs, _ = forward_model(
             ws,
             profile_grd,
@@ -163,55 +136,23 @@ def calc_arts_bts(date):
             height,
         )
 
-        # except (ValueError, KeyError, RuntimeError) as e:
-        #    print(
-        #        f"ARTS or extrapolation failed for dropsonde {sonde_id} with error: {e}, skipping"
-        #    )
-        #    pass
+        TBs_arts[sonde] = pd.DataFrame(data=BTs, index=freqs / 1e9)
+        TBs_hamp[sonde] = radiometers_loc["TBs"]
 
-        # Store arts BTs
-        TBs_arts[sonde_id] = pd.DataFrame(data=BTs, index=freqs / 1e9)
-        # get according hamp data
-        TBs_hamp[sonde_id] = hampdata_loc.radiometers.TBs.values
+        # plot_TB_comparison(TBs_arts[sonde], TBs_hamp[sonde], sonde)
 
-    # save results
-    TBs_arts.to_csv(f"Data/arts_calibration/{cfg['flightname']}/TBs_arts.csv")
-    TBs_hamp.to_csv(f"Data/arts_calibration/{cfg['flightname']}/TBs_hamp.csv")
+    TBs_arts.to_csv(f"Data/arts_calibration/{flightname}/TBs_arts.csv")
+    TBs_hamp.to_csv(f"Data/arts_calibration/{flightname}/TBs_hamp.csv")
 
 
-# %% call function
-# date = str(sys.argv[1])
-calc_arts_bts("20240827")
+# %% loop over flights
+flights = pd.read_csv("flights.csv", index_col=0)
+flights_processed = flights[
+    (flights["location"] == "sal") | (flights["location"] == "barbados")
+]
 
-# %% test turning extrapolated dropsonde profiles to ARTS input
-# read config
-cfg = rwfuncs.extract_config_params("config_ipns.yaml")
-ds_dropsonde = xr.open_dataset(cfg["path_dropsondes"], engine="zarr")
-profile = ds_dropsonde.isel(sonde_id=100)
-profile = profile.dropna("gpsalt")
-
-# %% convert xarray to ARTS gridded field
-profile_grd = fsm.generate_gridded_field_from_profiles(
-    pyarts.arts.Vector(profile["p"].values),
-    profile["ta"].values,
-    profile["alt"].values,
-    gases={
-        "H2O": typhon.physics.specific_humidity2vmr(profile["q"].values),
-        "N2": 0.78,
-        "O2": 0.21,
-    },
-)
-
-# %%
-
-BTs, _ = forward_model(
-    ws,
-    profile_grd,
-    10,
-    300,
-    1e4,
-)
-# %%
-freqs = sensor_description[:, 0] + sensor_description[:, 1] + sensor_description[:, 2]
-
+for date in flights_processed.index:
+    calc_arts_bts(
+        str(date), flights_processed.loc[date]["flightletter"], ds_dropsonde, cfg
+    )
 # %%

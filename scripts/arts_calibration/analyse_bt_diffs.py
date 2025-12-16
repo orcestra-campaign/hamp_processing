@@ -2,7 +2,8 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import xarray as xr
-from src import readwrite_functions as rwfuncs
+import yaml
+import numpy as np
 
 # %% define frequencies
 freq_k = [22.24, 23.04, 23.84, 25.44, 26.24, 27.84, 31.40]
@@ -41,38 +42,16 @@ calib_oters = [
     "20240928",
 ]
 
-next_flight_183 = ["202408"]
 
 # %% Read csv BTs
-dates = [
-    "20240811",
-    "20240813",
-    "20240816",
-    "20240818",
-    "20240821",
-    "20240822",
-    "20240825",
-    "20240827",
-    "20240829",
-    "20240831",
-    "20240903",
-    "20240906",
-    "20240907",
-    "20240909",
-    "20240912",
-    "20240914",
-    "20240916",
-    "20240919",
-    "20240921",
-    "20240923",
-    "20240924",
-    "20240926",
-    "20240928",
+flights = pd.read_csv("flights.csv", index_col=0)
+flights_processed = flights[
+    (flights["location"] == "sal") | (flights["location"] == "barbados")
 ]
 
 TB_arts_list = []
 TB_hamp_list = []
-for date in dates:
+for date in flights_processed.index:
     TB_arts_list.append(
         pd.read_csv(f"Data/arts_calibration/HALO-{date}a/TBs_arts.csv", index_col=0)
     )
@@ -81,18 +60,25 @@ for date in dates:
     )
 
 # load dropsonde data
-configfile = "config_ipns.yaml"
-cfg = rwfuncs.extract_config_params(configfile)
-ds_dropsonde = xr.open_dataset(cfg["path_dropsondes"], engine="zarr")
+with open("process_config.yaml") as f:
+    cfg = yaml.safe_load(f)
 
-# %% restructure data
+ds_dropsonde = xr.open_dataset(
+    "ipns://latest.orcestra-campaign.org/products/HALO/dropsondes/Level_3/PERCUSION_Level_3.zarr",
+    engine="zarr",
+)
+ds_dropsonde = ds_dropsonde.assign_coords(sonde=np.arange(ds_dropsonde.sonde.size))
+
+# restructure data
 TB_arts = pd.concat(TB_arts_list, axis=1)
 TB_hamp = pd.concat(TB_hamp_list, axis=1)
-launch_time = ds_dropsonde.sel(sonde_id=TB_arts.columns).launch_time.values
+launch_time = ds_dropsonde.sel(
+    sonde=[int(float(x)) for x in TB_arts.columns.values]
+).sonde_time.values
 TB_arts.columns = launch_time
 TB_hamp.columns = launch_time
-TB_arts = TB_arts.T
-TB_hamp = TB_hamp.T
+TB_arts = TB_arts.T.dropna()
+TB_hamp = TB_hamp.T.dropna()
 
 # %% calculate statistics for each flight
 diffs = TB_arts - TB_hamp
