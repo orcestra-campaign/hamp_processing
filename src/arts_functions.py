@@ -690,7 +690,7 @@ def fit_constant(x, y):
 
 def get_profiles(sonde, ds_dropsonde, radiometers):
     ds_dropsonde_loc = ds_dropsonde.sel(sonde=sonde)
-    drop_time = ds_dropsonde_loc["sonde_time"].values
+    drop_time = ds_dropsonde_loc["launch_time"].values
     hampdata_loc = radiometers.dropna("time").sel(time=drop_time, method="nearest")
     height = float(hampdata_loc.plane_altitude.values)
     return ds_dropsonde_loc, hampdata_loc, height, drop_time

@@ -69,14 +69,17 @@ def calc_arts_bts(date, flightletter, ds_dropsonde, cfg):
         f"{cfg['save_dir']}/radiometer/{flightname}_radio.zarr", engine="zarr"
     )
     ds_dropsonde = ds_dropsonde.where(
-        (ds_dropsonde["interp_time"] > pd.to_datetime(date))
-        & (ds_dropsonde["interp_time"] < pd.to_datetime(date) + pd.DateOffset(hour=23))
+        (ds_dropsonde["interpolated_time"] > pd.to_datetime(date))
+        & (
+            ds_dropsonde["interpolated_time"]
+            < pd.to_datetime(date) + pd.DateOffset(hour=23)
+        )
     ).dropna(dim="sonde", how="all")
 
     print("Calculate Cloud Mask")
     ds_dropsonde = ds_dropsonde.assign(
         radar_cloud_flag=(
-            ds_radar.sel(time=ds_dropsonde.sonde_time, method="nearest").sel(
+            ds_radar.sel(time=ds_dropsonde.launch_time, method="nearest").sel(
                 height=slice(200, None)
             )["dBZe"]
             > -30
