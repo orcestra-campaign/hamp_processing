@@ -154,8 +154,7 @@ flights_processed = flights[
     (flights["location"] == "sal") | (flights["location"] == "barbados")
 ]
 
-for date in flights_processed.index:
+for date in flights_processed.index[15:]:
     calc_arts_bts(
         str(date), flights_processed.loc[date]["flightletter"], ds_dropsonde, cfg
     )
-# %%

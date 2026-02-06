@@ -777,6 +777,8 @@ def is_complete(dropsonde, hamp, drop_time, height, sonde):
         (dropsonde["ta"].isnull().mean() == 1)
         or (dropsonde["p"].isnull().mean() == 1)
         or (dropsonde["q"].isnull().mean() == 1)
+        or (dropsonde["u"].isnull().mean() == 1)
+        or (dropsonde["v"].isnull().mean() == 1)
     ):
         print(f"Dropsonde {sonde} contains nan only, skipping")
         return False

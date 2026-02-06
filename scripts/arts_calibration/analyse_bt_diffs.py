@@ -74,7 +74,7 @@ TB_arts = pd.concat(TB_arts_list, axis=1)
 TB_hamp = pd.concat(TB_hamp_list, axis=1)
 launch_time = ds_dropsonde.sel(
     sonde=[int(float(x)) for x in TB_arts.columns.values]
-).sonde_time.values
+).launch_time.values
 TB_arts.columns = launch_time
 TB_hamp.columns = launch_time
 TB_arts = TB_arts.T.dropna()

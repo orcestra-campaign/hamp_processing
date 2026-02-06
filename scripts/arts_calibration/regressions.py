@@ -1,11 +1,11 @@
 # %%
 import numpy as np
-from scipy.stats import linregress
 import pandas as pd
 import xarray as xr
 import yaml
 from src.plots_functions import plot_regression
 import matplotlib.pyplot as plt
+from sklearn.linear_model import TheilSenRegressor
 
 # %% Read csv BTs
 
@@ -39,7 +39,7 @@ TB_arts = pd.concat(TB_arts_list, axis=1)
 TB_hamp = pd.concat(TB_hamp_list, axis=1)
 launch_time = ds_dropsonde.sel(
     sonde=[int(float(x)) for x in TB_arts.columns.values]
-).sonde_time.values
+).launch_time.values
 TB_arts.columns = launch_time
 TB_hamp.columns = launch_time
 TB_arts = TB_arts.T.dropna()
@@ -61,6 +61,7 @@ mask_arts
 # %%
 mask_hamp
 
+# %%
 
 # %%
 multi_index = pd.MultiIndex.from_product(
@@ -84,11 +85,19 @@ for date in flights_processed.index:
         y = y[mask]
 
         if len(x) > 0 and len(y) > 0:  # Ensure there are values left after filtering
-            regression = linregress(x, y)
-            regression_coeffs.loc[date, (f, "slope")] = regression.slope
-            regression_coeffs.loc[date, (f, "intercept")] = regression.intercept
+            model = TheilSenRegressor()
+            model.fit(x.reshape(-1, 1), y)
+            regression_coeffs.loc[date, (f, "slope")] = model.coef_[0]
+            regression_coeffs.loc[date, (f, "intercept")] = model.intercept_
+        else:
+            print(f"No valid data for frequency {f} on date {date}")
+# %%
+fig, ax = plt.subplots(figsize=(8, 6))
+ax.scatter(x, y)
+ax.plot(x, model.coef_[0] * x + model.intercept_, color="red")
 
 # %% plot regressions
+date = pd.to_datetime("20240928").date()
 fig = plot_regression(regression_coeffs, TB_arts, TB_hamp, date)
 fig.savefig(f"Plots/arts/{date}_regression.png", dpi=300)
 
